@@ -8,15 +8,16 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from huggingface_hub import InferenceClient
+import requests
 from dotenv import load_dotenv
 import os
 from pathlib import Path
 
 load_dotenv(Path(__file__).parent / ".env")
 
-HF_TOKEN = os.environ["HF_TOKEN"]
-HF_MODEL = os.environ["HF_MODEL"]
+GEMINI_KEY = os.environ["GEMINI_API_KEY"]
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-26b-a4b-it")
+_GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
 DETECT_PROMPT = (
     "Describe the surroundings ahead for a visually impaired person. "
     "Mention any obstacles or people in the path. "
@@ -32,9 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print("Initializing HF Inference client...")
-_client = InferenceClient(token=HF_TOKEN)
-print("Connected to HF Inference API.")
+print(f"Gemma 4 via Google Gemini API (model: {GEMINI_MODEL}).")
 
 print("Loading faster-whisper (tiny, int8)...")
 _whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
@@ -80,20 +79,26 @@ def _capture_frame() -> str:
 
 def _ask_gemma(user_prompt: str, max_tokens: int = 512) -> str:
     b64 = _capture_frame()
-    result = _client.chat.completions.create(
-        model=HF_MODEL,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                {"type": "text", "text": user_prompt},
-            ],
-        }],
-        max_tokens=max_tokens,
-        temperature=1.0,
-        top_p=0.95,
+    resp = requests.post(
+        _GEMINI_URL,
+        json={
+            "contents": [{
+                "parts": [
+                    {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
+                    {"text": user_prompt},
+                ]
+            }],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": 1.0,
+                "topP": 0.95,
+            },
+        },
+        timeout=30,
     )
-    return result.choices[0].message.content
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Gemini API error {resp.status_code}: {resp.text[:200]}")
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 @app.get("/detect", response_model=DetectResponse)

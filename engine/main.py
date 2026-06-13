@@ -1,23 +1,14 @@
 import re
-import io
-import base64
 import cv2
+import torch
 from pywhispercpp.model import Model as WhisperModel
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import requests
-from dotenv import load_dotenv
-import os
-from pathlib import Path
+from transformers import AutoModelForCausalLM
 
-load_dotenv(Path(__file__).parent / ".env")
-
-GEMINI_KEY = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-_GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
 DETECT_PROMPT = (
     "Describe the scene ahead in 1 short sentence. "
     "Name each person/obstacle and position "
@@ -26,7 +17,7 @@ DETECT_PROMPT = (
     "DETAIL:\nSTEER:"
 )
 
-app = FastAPI(title="NavCane API (Gemma 4)")
+app = FastAPI(title="NavCane API (Moondream2)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print(f"Gemma 4 via Google Gemini API (model: {GEMINI_MODEL}).")
+print("Loading Moondream2...")
+_model = AutoModelForCausalLM.from_pretrained(
+    "vikhyatk/moondream2",
+    trust_remote_code=True,
+    dtype=torch.bfloat16,
+    device_map="mps",
+)
+print("Moondream2 loaded.")
 
 print("Loading whisper.cpp (base)...")
 _whisper = WhisperModel("base", n_threads=8)
@@ -61,7 +59,7 @@ class AskResponse(BaseModel):
     answer: str
 
 
-def _capture_frame() -> str:
+def _capture_img() -> Image.Image:
     global _cap
     if _cap is None or not _cap.isOpened():
         _cap = cv2.VideoCapture(0)
@@ -73,38 +71,18 @@ def _capture_frame() -> str:
         raise HTTPException(500, "Failed to read frame from webcam")
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(rgb).resize((448, 448), Image.LANCZOS)
-    buf = io.BytesIO()
-    pil_img.save(buf, format="JPEG", quality=60)
-    return base64.b64encode(buf.getvalue()).decode()
+    return Image.fromarray(rgb)
 
 
-def _ask_gemma(user_prompt: str, max_tokens: int = 150) -> str:
-    b64 = _capture_frame()
-    body = {
-        "contents": [{
-            "parts": [
-                {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                {"text": user_prompt},
-            ]
-        }],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": 0.0,
-        },
-    }
-    resp = requests.post(_GEMINI_URL, json=body, timeout=30)
-    if resp.status_code == 429:
-        raise HTTPException(503, "VLM rate-limited, wait a moment")
-    if resp.status_code != 200:
-        raise HTTPException(502, f"Gemini API error {resp.status_code}: {resp.text[:200]}")
-    parts = resp.json()["candidates"][0]["content"]["parts"]
-    return "".join(p["text"] for p in parts if not p.get("thought"))
+def _ask_vlm(user_prompt: str) -> str:
+    pil_img = _capture_img()
+    reply = _model.query(pil_img, user_prompt)
+    return reply.get("answer", str(reply)) if isinstance(reply, dict) else str(reply)
 
 
 @app.get("/detect", response_model=DetectResponse)
 def detect():
-    raw = _ask_gemma(DETECT_PROMPT, max_tokens=150)
+    raw = _ask_vlm(DETECT_PROMPT)
     detail = ""
     steer = ""
     lines = raw.split("\n")
@@ -131,7 +109,7 @@ def ask(req: AskRequest):
     prompt = req.prompt.strip()
     if not prompt.endswith("STEER:"):
         prompt += "\nDETAIL:\nSTEER:"
-    answer = _ask_gemma(prompt)
+    answer = _ask_vlm(prompt)
     return AskResponse(answer=answer)
 
 
@@ -168,7 +146,7 @@ async def transcribe(audio: UploadFile = File(...)):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "model": "gemma-4-26B-A4B-it"}
+    return {"status": "ok", "model": "moondream2"}
 
 
 @app.on_event("shutdown")

@@ -1,23 +1,21 @@
-import re
-import io
-import base64
 import cv2
+import base64
+from io import BytesIO
 from pywhispercpp.model import Model as WhisperModel
 import numpy as np
 from PIL import Image
+from huggingface_hub import InferenceClient
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import requests
 from dotenv import load_dotenv
 import os
 from pathlib import Path
 
 load_dotenv(Path(__file__).parent / ".env")
 
-GEMINI_KEY = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-31b-it")
-_GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
+HF_TOKEN = os.environ["HF_TOKEN"]
+_hf_client = InferenceClient(token=HF_TOKEN, model="google/gemma-4-E2B-it")
 
 DETECT_PROMPT = (
     "You are a guide for a blind person. "
@@ -36,11 +34,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print(f"VLM via Gemini API (model: {GEMINI_MODEL}).")
+print("whisper.cpp will be lazily loaded on first use.")
 
-print("Loading whisper.cpp (base)...")
-_whisper = WhisperModel("base", n_threads=8)
-print("whisper.cpp loaded.")
+_whisper = None
 
 _cap = cv2.VideoCapture(0)
 if not _cap.isOpened():
@@ -62,7 +58,7 @@ class AskResponse(BaseModel):
     answer: str
 
 
-def _capture_frame() -> str:
+def _capture_img() -> Image.Image:
     global _cap
     if _cap is None or not _cap.isOpened():
         _cap = cv2.VideoCapture(0)
@@ -74,33 +70,37 @@ def _capture_frame() -> str:
         raise HTTPException(500, "Failed to read frame from webcam")
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(rgb).resize((448, 448), Image.LANCZOS)
-    buf = io.BytesIO()
-    pil_img.save(buf, format="JPEG", quality=60)
-    return base64.b64encode(buf.getvalue()).decode()
+    return Image.fromarray(rgb)
+
+
+def _get_whisper():
+    global _whisper
+    if _whisper is None:
+        print("Loading whisper.cpp (base)...")
+        _whisper = WhisperModel("base", n_threads=8)
+        print("whisper.cpp loaded.")
+    return _whisper
 
 
 def _ask_vlm(user_prompt: str, max_tokens: int = 500) -> str:
-    b64 = _capture_frame()
-    body = {
-        "contents": [{
-            "parts": [
-                {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                {"text": user_prompt},
-            ]
-        }],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": 0.0,
-        },
-    }
-    resp = requests.post(_GEMINI_URL, json=body, timeout=60)
-    if resp.status_code == 429:
-        raise HTTPException(503, "VLM rate-limited, wait a moment")
-    if resp.status_code != 200:
-        raise HTTPException(502, f"Gemini API error {resp.status_code}: {resp.text[:200]}")
-    parts = resp.json()["candidates"][0]["content"]["parts"]
-    return "".join(p["text"] for p in parts if not p.get("thought"))
+    pil_img = _capture_img()
+    buffered = BytesIO()
+    pil_img.save(buffered, format="PNG")
+    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    reply = _hf_client.chat_completion(
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                    {"type": "text", "text": user_prompt},
+                ],
+            },
+        ],
+        max_tokens=max_tokens,
+    )
+    return reply.choices[0].message.content.strip()
 
 
 _DIRECTION_WORDS = [
@@ -155,14 +155,14 @@ async def transcribe(audio: UploadFile = File(...)):
         if os.path.exists(wav_path):
             os.unlink(wav_path)
 
-    segments = _whisper.transcribe(audio_arr)
+    segments = _get_whisper().transcribe(audio_arr)
     text = "".join(seg.text for seg in segments)
     return {"text": text.strip()}
 
 
 @app.get("/")
 def root():
-    return {"status": "ok", "model": GEMINI_MODEL}
+    return {"status": "ok", "model": "google/gemma-4-E2B-it (HF Inference API)"}
 
 
 @app.on_event("shutdown")

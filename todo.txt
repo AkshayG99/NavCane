@@ -1,0 +1,6 @@
+
+- fast api python server (done)
+- make the VLM work properly 
+- nextjs front end (chat interface)
+- nice prompt and map
+- 

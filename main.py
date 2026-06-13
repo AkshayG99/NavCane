@@ -1,0 +1,98 @@
+import re
+import cv2
+import torch
+from PIL import Image
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from transformers import AutoModelForCausalLM
+
+app = FastAPI(title="Moondream VLM")
+
+print("Loading Moondream2...")
+_model = AutoModelForCausalLM.from_pretrained(
+    "vikhyatk/moondream2",
+    trust_remote_code=True,
+    dtype=torch.bfloat16,
+    device_map="mps",
+)
+print("Moondream2 loaded.")
+
+_cap = cv2.VideoCapture(0)
+if not _cap.isOpened():
+    print("Warning: Could not open webcam at startup.")
+else:
+    print("Webcam opened.")
+
+
+class DetectResponse(BaseModel):
+    caption: str
+    danger_level: int
+
+
+class AskRequest(BaseModel):
+    prompt: str
+
+
+class AskResponse(BaseModel):
+    answer: str
+
+
+@app.get("/detect", response_model=DetectResponse)
+def detect():
+    global _cap
+    if _cap is None or not _cap.isOpened():
+        _cap = cv2.VideoCapture(0)
+    if not _cap.isOpened():
+        raise HTTPException(500, "Could not open webcam")
+
+    ret, frame = _cap.read()
+    if not ret:
+        raise HTTPException(500, "Failed to read frame from webcam")
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(rgb)
+
+    reply = _model.query(
+        pil_img,
+        "Describe the surroundings ahead for a visually impaired person. "
+        "Mention any obstacles or people in the path. "
+        "End with danger level 0-3 (0=clear, 3=immediate danger)."
+    )
+
+    description = reply.get("answer", str(reply)) if isinstance(reply, dict) else str(reply)
+    digits = re.findall(r"\b[0-3]\b", description)
+    danger_level = int(digits[-1]) if digits else 0
+
+    return DetectResponse(caption=description, danger_level=danger_level)
+
+
+@app.post("/ask", response_model=AskResponse)
+def ask(req: AskRequest):
+    global _cap
+    if _cap is None or not _cap.isOpened():
+        _cap = cv2.VideoCapture(0)
+    if not _cap.isOpened():
+        raise HTTPException(500, "Could not open webcam")
+
+    ret, frame = _cap.read()
+    if not ret:
+        raise HTTPException(500, "Failed to read frame from webcam")
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(rgb)
+
+    reply = _model.query(pil_img, req.prompt)
+    answer = reply.get("answer", str(reply)) if isinstance(reply, dict) else str(reply)
+
+    return AskResponse(answer=answer)
+
+
+@app.get("/")
+def root():
+    return {"status": "ok", "model": "moondream2"}
+
+
+@app.on_event("shutdown")
+def shutdown():
+    if _cap is not None and _cap.isOpened():
+        _cap.release()

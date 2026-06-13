@@ -16,7 +16,7 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
 
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-e4b-it")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-31b-it")
 _GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
 
 DETECT_PROMPT = (
@@ -27,7 +27,7 @@ DETECT_PROMPT = (
     "End with a clear direction like \"Move left\" or \"Stop, obstacle ahead\"."
 )
 
-app = FastAPI(title="NavCane API (Gemma 4 E4B)")
+app = FastAPI(title="NavCane API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print(f"Gemma 4 E4B via Gemini API (model: {GEMINI_MODEL}).")
+print(f"VLM via Gemini API (model: {GEMINI_MODEL}).")
 
 print("Loading whisper.cpp (base)...")
 _whisper = WhisperModel("base", n_threads=8)
@@ -162,7 +162,7 @@ async def transcribe(audio: UploadFile = File(...)):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "model": f"gemma-4-e4b-it (via Gemini API)"}
+    return {"status": "ok", "model": GEMINI_MODEL}
 
 
 @app.on_event("shutdown")

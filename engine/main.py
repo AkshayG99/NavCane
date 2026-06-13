@@ -1,8 +1,10 @@
 import re
 import cv2
 import torch
+import whisper
+import numpy as np
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM
@@ -24,6 +26,10 @@ _model = AutoModelForCausalLM.from_pretrained(
     device_map="mps",
 )
 print("Moondream2 loaded.")
+
+print("Loading Whisper...")
+_whisper = whisper.load_model("tiny", device="mps")
+print("Whisper loaded.")
 
 _cap = cv2.VideoCapture(0)
 if not _cap.isOpened():
@@ -93,6 +99,28 @@ def ask(req: AskRequest):
     answer = reply.get("answer", str(reply)) if isinstance(reply, dict) else str(reply)
 
     return AskResponse(answer=answer)
+
+
+@app.post("/transcribe")
+async def transcribe(audio: UploadFile = File(...)):
+    from pydub import AudioSegment
+    import io
+
+    data = await audio.read()
+    seg = AudioSegment.from_file(io.BytesIO(data))
+    seg = seg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+
+    raw = io.BytesIO()
+    seg.export(raw, format="wav")
+    raw.seek(0)
+
+    import wave
+    with wave.open(raw, "rb") as wav:
+        frames = wav.readframes(wav.getnframes())
+    audio_arr = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+
+    result = _whisper.transcribe(audio_arr, language="en")
+    return {"text": result["text"].strip()}
 
 
 @app.get("/")

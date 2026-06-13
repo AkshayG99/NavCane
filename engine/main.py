@@ -80,7 +80,7 @@ def _capture_frame() -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _ask_vlm(user_prompt: str, max_tokens: int = 150) -> str:
+def _ask_vlm(user_prompt: str, max_tokens: int = 200) -> str:
     b64 = _capture_frame()
     body = {
         "contents": [{
@@ -94,7 +94,7 @@ def _ask_vlm(user_prompt: str, max_tokens: int = 150) -> str:
             "temperature": 0.0,
         },
     }
-    resp = requests.post(_GEMINI_URL, json=body, timeout=30)
+    resp = requests.post(_GEMINI_URL, json=body, timeout=60)
     if resp.status_code == 429:
         raise HTTPException(503, "VLM rate-limited, wait a moment")
     if resp.status_code != 200:

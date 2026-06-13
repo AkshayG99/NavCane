@@ -37,7 +37,7 @@ export function Chat() {
         body: JSON.stringify({ prompt: userMsg.content }),
       })
       const data = await res.json()
-      setMessages((prev) => [...prev, { role: "assistant", content: data.answer }])
+      setMessages((prev) => [...prev, { role: "assistant", content: data.answer || data.detail || "No response" }])
     } catch {
       setMessages((prev) => [
         ...prev,

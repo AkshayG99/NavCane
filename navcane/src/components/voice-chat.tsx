@@ -108,8 +108,9 @@ export function VoiceChat() {
           body: JSON.stringify({ prompt: text }),
         })
         const askData = await askRes.json()
-        setResponse(askData.answer)
-        const utterance = new SpeechSynthesisUtterance(askData.answer)
+        const answer = askData.answer || askData.detail || "No response"
+        setResponse(answer)
+        const utterance = new SpeechSynthesisUtterance(answer)
         utterance.rate = 0.95
         speechSynthesis.speak(utterance)
       }

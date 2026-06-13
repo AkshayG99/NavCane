@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, useCallback } from "react"
 export function VoiceChat() {
   const [recording, setRecording] = useState(false)
   const [transcript, setTranscript] = useState("")
-  const [response, setResponse] = useState("")
   const [loading, setLoading] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animRef = useRef<number>(0)
@@ -81,7 +80,6 @@ export function VoiceChat() {
       recorder.start()
       setRecording(true)
       setTranscript("")
-      setResponse("")
     } catch {
       setTranscript("Microphone access denied.")
     }
@@ -98,21 +96,7 @@ export function VoiceChat() {
         body: formData,
       })
       const data = await res.json()
-      const text = data.text || ""
-      setTranscript(text)
-
-      if (text) {
-        const askRes = await fetch("http://localhost:8080/ask", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: text }),
-        })
-        const askData = await askRes.json()
-        setResponse(askData.answer)
-        const utterance = new SpeechSynthesisUtterance(askData.answer)
-        utterance.rate = 0.95
-        speechSynthesis.speak(utterance)
-      }
+      setTranscript(data.text || "")
     } catch {
       setTranscript("Transcription failed.")
     } finally {
@@ -160,12 +144,6 @@ export function VoiceChat() {
           ? "Transcribing..."
           : transcript || (recording ? "Recording... tap stop when done" : "Press the mic and speak.")}
       </p>
-
-      {response && (
-        <p className="text-sm bg-muted rounded-xl px-4 py-2 max-w-md text-center">
-          {response}
-        </p>
-      )}
 
       <div className="flex gap-3">
         {!recording ? (

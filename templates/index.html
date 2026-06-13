@@ -3,93 +3,222 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>CANE-NAV</title>
+  <title>CANE-NAV | Campus Guidance</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Leaflet.js CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Custom Stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <div class="container">
-    <!-- Header Panel -->
-    <div class="glass-panel header-bar">
-      <div class="logo">
-        <span class="compass-icon">🧭</span>
-        <span class="logo-text">CANE-NAV</span>
-      </div>
-      <div id="gps-pill" class="status-pill gps-inactive">GPS INACTIVE</div>
-    </div>
-    
-    <!-- Navigation Controls Panel -->
-    <div class="glass-panel">
-      <div class="control-grid">
-        <select id="start">
-          <option value="">-- Start Location --</option>
-          {% for key in landmarks %}
-          <option value="{{ key }}">{{ key.upper() }}</option>
-          {% endfor %}
-        </select>
+  <!-- Smartphone Simulator Wrapper -->
+  <div class="phone-wrapper">
+    <!-- Fullscreen Leaflet Map -->
+    <div id="map"></div>
 
-        <select id="end">
-          <option value="">-- Destination --</option>
-          {% for key in landmarks %}
-          <option value="{{ key }}">{{ key.upper() }}</option>
-          {% endfor %}
-        </select>
+    <!-- Floating HUD Elements -->
+    <div id="gps-pill" class="status-pill gps-inactive floating-gps">GPS INACTIVE</div>
+
+    <!-- Map controls -->
+    <div class="map-actions">
+      <button class="map-action-btn" onclick="recenterMap()">🎯</button>
+      <button class="map-action-btn" onclick="if (map) map.zoomIn();">＋</button>
+      <button class="map-action-btn" onclick="if (map) map.zoomOut();">－</button>
+    </div>
+
+    <!-- Pre-navigation Control Panel Card -->
+    <div id="pre-nav-card" class="apple-pre-nav">
+      <div class="brand-header">
+        <span class="compass-icon">🧭</span>
+        <span class="brand-title">CANE-NAV</span>
+      </div>
+      <p class="brand-subtitle">Sidewalk campus routing and obstacle avoidance</p>
+      
+      <div class="control-grid">
+        <div class="select-field">
+          <span class="select-icon">📍</span>
+          <select id="start">
+            <option value="">-- Start Location --</option>
+            {% for key in landmarks %}
+            <option value="{{ key }}">{{ key.upper() }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="select-field">
+          <span class="select-icon">🏁</span>
+          <select id="end">
+            <option value="">-- Destination --</option>
+            {% for key in landmarks %}
+            <option value="{{ key }}">{{ key.upper() }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
       
-      <div class="control-row" style="margin-top: 14px; margin-bottom: 10px;">
-        <span class="label">📍 Route Simulation Mode</span>
+      <div class="control-row-sim">
+        <div class="sim-label-group">
+          <span class="sim-label-icon">🛰️</span>
+          <span class="label">Route Simulation Mode</span>
+        </div>
         <label class="switch">
           <input type="checkbox" id="sim-toggle" onchange="toggleSim()">
           <span class="slider"></span>
         </label>
       </div>
       
-      <div class="btn-row">
-        <button id="go-btn" class="nav-btn btn-go" onclick="startNav()">Start Navigation</button>
-        <button id="stop-btn" class="nav-btn btn-stop" onclick="stopNav()" disabled>Stop</button>
-      </div>
+      <button id="go-btn" class="apple-btn btn-go-gradient" onclick="startNav()">
+        Directions
+      </button>
     </div>
 
-    <!-- Camera Viewport Panel -->
-    <div class="glass-panel" style="padding: 10px;">
-      <div id="camera-container" class="camera-viewport">
-        <video id="video" autoplay playsinline muted style="display:none; width:100%; height:100%; object-fit: cover;"></video>
-        <canvas id="canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
-        <div id="alert-banner" class="alert-overlay" style="display:none;"></div>
-        <div id="avoidance-card" class="avoidance-hud" style="display:none;">
-          <span id="avoidance-text"></span>
-        </div>
-        <div id="cam-placeholder" class="camera-placeholder">
-          <span style="font-size: 3rem; margin-bottom: 8px;">📷</span>
-          <span style="color: var(--text-secondary); font-size: 0.9rem;">Camera feed disabled</span>
-        </div>
-      </div>
-      <div class="btn-row" style="margin-top: 10px; margin-bottom: 0;">
-        <button id="cam-btn" class="btn-icon" onclick="toggleCamera()">📷 Enable Camera Vision</button>
-        <button id="sound-btn" class="btn-icon btn-active" onclick="toggleSound()">🔊 Sound Alerts</button>
-      </div>
-    </div>
-
-    <!-- Navigation Step Card -->
-    <div id="step-box" class="glass-panel nav-step-panel" style="display: none;">
-      <div class="step-header">
-        <span id="step-num" class="step-badge">Step 1 of 5</span>
-        <span id="step-dist" class="step-distance">~100m away</span>
-      </div>
-      <div class="step-content">
-        <div class="step-icon-wrap">
+    <!-- Top Apple Navigation guidance Banner -->
+    <div id="step-box" class="apple-nav-banner" style="display: none;">
+      <div class="banner-left">
+        <div class="direction-badge-wrap">
           <span id="step-icon" class="step-direction-icon">⬆️</span>
         </div>
+      </div>
+      <div class="banner-center">
         <div id="step-text" class="step-instruction-text">Departing start point...</div>
+        <div id="step-num" class="step-badge" style="display: none;">Step 1 of 5</div>
       </div>
-      <div class="progress-bar-wrap">
-        <div id="progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+      <div class="banner-right">
+        <span id="step-dist" class="banner-distance">~100m</span>
       </div>
-      <div id="progress" class="progress-summary-text">4 steps remaining</div>
+      <!-- Invisible hooks for legacy compatibility with nav.js -->
+      <div id="progress-fill" style="display:none; width:0%;"></div>
+      <div id="progress" style="display:none;"></div>
     </div>
 
-    <!-- Debug Log/Status Bar -->
-    <div id="status" class="glass-panel debug-log">
-      Waiting to start navigation...
+    <!-- Bottom Apple Maps Drawer Panel -->
+    <div id="trip-drawer" class="apple-drawer" style="display: none;">
+      <div class="drawer-header" onclick="toggleDrawer()">
+        <div class="drawer-grab-bar"></div>
+        <div class="drawer-summary-row">
+          <div class="summary-left">
+            <span id="trip-duration" class="summary-time">-- min</span>
+            <span class="summary-divider">•</span>
+            <span id="trip-distance" class="summary-dist">-- m</span>
+            <span class="summary-divider">•</span>
+            <span id="trip-eta" class="summary-eta">--:--</span>
+          </div>
+          <button id="stop-btn" class="apple-end-btn" onclick="stopNav()" disabled>End</button>
+        </div>
+        <div class="drawer-trigger-hint">
+          <span class="drawer-chevron">▲</span> Tap to show camera vision & alignment HUD
+        </div>
+      </div>
+      
+      <div class="drawer-content-scrollable">
+        <!-- Camera Viewport Widget Card -->
+        <div class="drawer-widget-card">
+          <div class="widget-header">📷 CAMERA VISION SCANNER</div>
+          <div id="camera-container" class="camera-viewport">
+            <div class="hud-scanner-overlay"></div>
+            <video id="video" autoplay playsinline muted style="display:none; width:100%; height:100%; object-fit: cover;"></video>
+            <canvas id="canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 5;"></canvas>
+            <div id="alert-banner" class="alert-overlay" style="display:none;"></div>
+            <div id="avoidance-card" class="avoidance-hud" style="display:none;">
+              <span id="avoidance-text"></span>
+            </div>
+            <div id="cam-placeholder" class="camera-placeholder">
+              <div class="placeholder-radar">
+                <div class="radar-beam"></div>
+                <span style="font-size: 2.2rem; z-index: 2;">📷</span>
+              </div>
+              <span class="placeholder-title">Vision Model Disabled</span>
+              <span class="placeholder-subtitle">Enable vision scanning to detect sidewalk hazards</span>
+            </div>
+          </div>
+          <div class="btn-row-vision">
+            <button id="cam-btn" class="btn-icon" onclick="toggleCamera()">📷 Enable Vision</button>
+            <button id="sound-btn" class="btn-icon btn-active" onclick="toggleSound()">🔊 Sound Alerts</button>
+            <button id="drift-audio-btn" class="btn-icon btn-active" onclick="toggleDriftAudio()">🔊 Drift Audio</button>
+          </div>
+        </div>
+
+        <!-- Path Alignment HUD Card -->
+        <div id="hud-panel" class="drawer-widget-card" style="display: block;">
+          <div class="widget-header">🛣️ PATH ALIGNMENT HUD</div>
+          
+          <div class="hud-row">
+            <div class="hud-item">
+              <span class="hud-label">DRIFT STATUS</span>
+              <span id="hud-drift-value" class="hud-value">On Path</span>
+            </div>
+            <div class="hud-item-wide">
+              <!-- Drift Gauge Bar -->
+              <div class="hud-drift-track">
+                <div class="hud-drift-center-line"></div>
+                <div id="hud-drift-fill" class="hud-drift-marker hud-fill-aligned"></div>
+              </div>
+              <div class="hud-drift-labels">
+                <span>Left</span>
+                <span>Center</span>
+                <span>Right</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="hud-divider"></div>
+          
+          <div class="hud-row-grid">
+            <div class="hud-item-stat">
+              <span class="hud-label">TARGET PATH</span>
+              <span id="hud-path-heading" class="hud-value">--</span>
+            </div>
+            <div class="hud-item-stat">
+              <span class="hud-label">YOUR HEADING</span>
+              <span id="hud-user-heading" class="hud-value">--</span>
+            </div>
+            <div class="hud-item-stat">
+              <span class="hud-label">DEVIATION</span>
+               <span id="hud-heading-deviation" class="hud-value">--</span>
+            </div>
+            <div class="hud-item-stat-full">
+              <span class="hud-label">ALIGNMENT STATUS</span>
+              <div id="hud-heading-status" class="hud-status-badge status-inactive">NO COMPASS</div>
+            </div>
+          </div>
+
+          <!-- Simulation Manual Override Controls -->
+          <div id="sim-controls-panel" class="sim-controls-section" style="display: none;">
+            <div class="hud-divider" style="margin-top: 15px;"></div>
+            <div class="sim-controls-title">⚙️ Simulator Parameters</div>
+            
+            <div class="sim-control-row">
+              <div class="sim-slider-label-wrap">
+                <span class="sim-slider-label">Drift Side-to-Side:</span>
+                <span id="sim-drift-val" class="sim-slider-value">0.0m</span>
+               </div>
+              <div class="slider-container">
+                <input type="range" id="sim-drift-slider" class="sim-range-slider" min="-5.0" max="5.0" step="0.2" value="0.0" oninput="document.getElementById('sim-drift-val').textContent = (parseFloat(this.value) > 0 ? '+' : '') + parseFloat(this.value).toFixed(1) + 'm'; updateSimulationParameters();">
+              </div>
+            </div>
+            
+            <div class="sim-control-row" style="margin-top: 14px;">
+              <div class="sim-slider-label-wrap">
+                <span class="sim-slider-label">Heading Deviation (Turn):</span>
+                <span id="sim-heading-val" class="sim-slider-value">0°</span>
+              </div>
+              <div class="slider-container">
+                <input type="range" id="sim-heading-slider" class="sim-range-slider" min="-180" max="180" step="5" value="0" oninput="document.getElementById('sim-heading-val').textContent = (parseInt(this.value) > 0 ? '+' : '') + this.value + '°'; updateSimulationParameters();">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug Log/Status Bar floating above cards -->
+    <div id="status" class="glass-panel debug-log floating-console">
+      <span class="terminal-prompt">&gt;</span> <span class="terminal-text">System ready...</span>
+      <span class="terminal-cursor"></span>
     </div>
   </div>
 

@@ -3,10 +3,18 @@ import cv2
 import torch
 from PIL import Image
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM
 
 app = FastAPI(title="Moondream VLM")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 print("Loading Moondream2...")
 _model = AutoModelForCausalLM.from_pretrained(

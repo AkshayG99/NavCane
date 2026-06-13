@@ -1,7 +1,7 @@
 import re
 import cv2
 import torch
-import whisper
+import mlx_whisper
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -27,9 +27,7 @@ _model = AutoModelForCausalLM.from_pretrained(
 )
 print("Moondream2 loaded.")
 
-print("Loading Whisper...")
-_whisper = whisper.load_model("tiny", device="mps")
-print("Whisper loaded.")
+print("Will use mlx-whisper (tiny) for transcription.")
 
 _cap = cv2.VideoCapture(0)
 if not _cap.isOpened():
@@ -127,7 +125,7 @@ async def transcribe(audio: UploadFile = File(...)):
         if os.path.exists(wav_path):
             os.unlink(wav_path)
 
-    result = _whisper.transcribe(audio_arr, language="en")
+    result = mlx_whisper.transcribe(audio_arr)
     return {"text": result["text"].strip()}
 
 

@@ -31,6 +31,10 @@ def check_step():
         return jsonify({"error": "bad params"}), 400
     return jsonify({"ok": True})
 
+@app.route("/obstacle")
+def obstacle_page():
+    return render_template("obstacle.html")
+
 @app.route("/api/detect", methods=["POST"])
 def api_detect():
     data = request.get_json(silent=True)

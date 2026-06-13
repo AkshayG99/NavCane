@@ -2,7 +2,7 @@ import re
 import io
 import base64
 import cv2
-from faster_whisper import WhisperModel
+from pywhispercpp.model import Model as WhisperModel
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -16,12 +16,14 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
 
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-26b-a4b-it")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 _GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
 DETECT_PROMPT = (
-    "Describe the surroundings ahead for a visually impaired person. "
-    "Mention any obstacles or people in the path. "
-    "End with danger level 0-3 (0=clear, 3=immediate danger)."
+    "Describe the scene ahead in 1 short sentence. "
+    "Name each person/obstacle and position "
+    "(e.g. 'person bottom-right', 'chair ahead-left'). "
+    "Then give a steering instruction (<8 words).\n"
+    "DETAIL:\nSTEER:"
 )
 
 app = FastAPI(title="NavCane API (Gemma 4)")
@@ -35,9 +37,9 @@ app.add_middleware(
 
 print(f"Gemma 4 via Google Gemini API (model: {GEMINI_MODEL}).")
 
-print("Loading faster-whisper (tiny, int8)...")
-_whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
-print("faster-whisper loaded.")
+print("Loading whisper.cpp (base)...")
+_whisper = WhisperModel("base", n_threads=8)
+print("whisper.cpp loaded.")
 
 _cap = cv2.VideoCapture(0)
 if not _cap.isOpened():
@@ -47,8 +49,8 @@ else:
 
 
 class DetectResponse(BaseModel):
-    caption: str
-    danger_level: int
+    detail: str
+    steer: str
 
 
 class AskRequest(BaseModel):
@@ -71,47 +73,65 @@ def _capture_frame() -> str:
         raise HTTPException(500, "Failed to read frame from webcam")
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(rgb)
+    pil_img = Image.fromarray(rgb).resize((448, 448), Image.LANCZOS)
     buf = io.BytesIO()
-    pil_img.save(buf, format="JPEG", quality=85)
+    pil_img.save(buf, format="JPEG", quality=60)
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _ask_gemma(user_prompt: str, max_tokens: int = 512) -> str:
+def _ask_gemma(user_prompt: str, max_tokens: int = 150) -> str:
     b64 = _capture_frame()
-    resp = requests.post(
-        _GEMINI_URL,
-        json={
-            "contents": [{
-                "parts": [
-                    {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                    {"text": user_prompt},
-                ]
-            }],
-            "generationConfig": {
-                "maxOutputTokens": max_tokens,
-                "temperature": 1.0,
-                "topP": 0.95,
-            },
+    body = {
+        "contents": [{
+            "parts": [
+                {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
+                {"text": user_prompt},
+            ]
+        }],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": 0.0,
         },
-        timeout=30,
-    )
+    }
+    resp = requests.post(_GEMINI_URL, json=body, timeout=30)
+    if resp.status_code == 429:
+        raise HTTPException(503, "VLM rate-limited, wait a moment")
     if resp.status_code != 200:
         raise HTTPException(502, f"Gemini API error {resp.status_code}: {resp.text[:200]}")
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    parts = resp.json()["candidates"][0]["content"]["parts"]
+    return "".join(p["text"] for p in parts if not p.get("thought"))
 
 
 @app.get("/detect", response_model=DetectResponse)
 def detect():
-    description = _ask_gemma(DETECT_PROMPT)
-    digits = re.findall(r"\b[0-3]\b", description)
-    danger_level = int(digits[-1]) if digits else 0
-    return DetectResponse(caption=description, danger_level=danger_level)
+    raw = _ask_gemma(DETECT_PROMPT, max_tokens=150)
+    detail = ""
+    steer = ""
+    lines = raw.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("DETAIL:"):
+            parts = []
+            i += 1
+            while i < len(lines) and not lines[i].startswith("STEER:"):
+                parts.append(lines[i])
+                i += 1
+            detail = "\n".join(parts).strip()
+        elif line.startswith("STEER:"):
+            steer = line.removeprefix("STEER:").strip()
+            i += 1
+        else:
+            i += 1
+    return DetectResponse(detail=detail or raw, steer=steer)
 
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
-    answer = _ask_gemma(req.prompt)
+    prompt = req.prompt.strip()
+    if not prompt.endswith("STEER:"):
+        prompt += "\nDETAIL:\nSTEER:"
+    answer = _ask_gemma(prompt)
     return AskResponse(answer=answer)
 
 
@@ -141,7 +161,7 @@ async def transcribe(audio: UploadFile = File(...)):
         if os.path.exists(wav_path):
             os.unlink(wav_path)
 
-    segments, _info = _whisper.transcribe(audio_arr, language="en")
+    segments = _whisper.transcribe(audio_arr)
     text = "".join(seg.text for seg in segments)
     return {"text": text.strip()}
 

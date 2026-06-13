@@ -80,7 +80,7 @@ def _capture_frame() -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _ask_vlm(user_prompt: str, max_tokens: int = 200) -> str:
+def _ask_vlm(user_prompt: str, max_tokens: int = 500) -> str:
     b64 = _capture_frame()
     body = {
         "contents": [{

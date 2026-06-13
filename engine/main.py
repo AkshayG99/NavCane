@@ -1,23 +1,33 @@
 import re
+import io
+import base64
 import cv2
-import torch
 from pywhispercpp.model import Model as WhisperModel
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM
+import requests
+from dotenv import load_dotenv
+import os
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent / ".env")
+
+GEMINI_KEY = os.environ["GEMINI_API_KEY"]
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemma-4-e4b-it")
+_GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
 
 DETECT_PROMPT = (
-    "Describe the scene ahead in 1 short sentence. "
-    "Name each person/obstacle and position "
-    "(e.g. 'person bottom-right', 'chair ahead-left'). "
-    "Then give a steering instruction (<8 words).\n"
-    "DETAIL:\nSTEER:"
+    "You are a guide for a blind person. "
+    "Describe what is directly ahead in 1-2 sentences — "
+    "name any people, objects, or obstacles and where they are "
+    "(left, right, center, close, far). "
+    "End with a clear direction like \"Move left\" or \"Stop, obstacle ahead\"."
 )
 
-app = FastAPI(title="NavCane API (Moondream2)")
+app = FastAPI(title="NavCane API (Gemma 4 E4B)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,14 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print("Loading Moondream2...")
-_model = AutoModelForCausalLM.from_pretrained(
-    "vikhyatk/moondream2",
-    trust_remote_code=True,
-    dtype=torch.bfloat16,
-    device_map="mps",
-)
-print("Moondream2 loaded.")
+print(f"Gemma 4 E4B via Gemini API (model: {GEMINI_MODEL}).")
 
 print("Loading whisper.cpp (base)...")
 _whisper = WhisperModel("base", n_threads=8)
@@ -59,7 +62,7 @@ class AskResponse(BaseModel):
     answer: str
 
 
-def _capture_img() -> Image.Image:
+def _capture_frame() -> str:
     global _cap
     if _cap is None or not _cap.isOpened():
         _cap = cv2.VideoCapture(0)
@@ -71,45 +74,58 @@ def _capture_img() -> Image.Image:
         raise HTTPException(500, "Failed to read frame from webcam")
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    return Image.fromarray(rgb)
+    pil_img = Image.fromarray(rgb).resize((448, 448), Image.LANCZOS)
+    buf = io.BytesIO()
+    pil_img.save(buf, format="JPEG", quality=60)
+    return base64.b64encode(buf.getvalue()).decode()
 
 
-def _ask_vlm(user_prompt: str) -> str:
-    pil_img = _capture_img()
-    reply = _model.query(pil_img, user_prompt)
-    return reply.get("answer", str(reply)) if isinstance(reply, dict) else str(reply)
+def _ask_vlm(user_prompt: str, max_tokens: int = 150) -> str:
+    b64 = _capture_frame()
+    body = {
+        "contents": [{
+            "parts": [
+                {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
+                {"text": user_prompt},
+            ]
+        }],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": 0.0,
+        },
+    }
+    resp = requests.post(_GEMINI_URL, json=body, timeout=30)
+    if resp.status_code == 429:
+        raise HTTPException(503, "VLM rate-limited, wait a moment")
+    if resp.status_code != 200:
+        raise HTTPException(502, f"Gemini API error {resp.status_code}: {resp.text[:200]}")
+    parts = resp.json()["candidates"][0]["content"]["parts"]
+    return "".join(p["text"] for p in parts if not p.get("thought"))
+
+
+_DIRECTION_WORDS = [
+    "left", "right", "straight", "ahead", "forward", "back",
+    "stop", "wait", "careful", "slow", "up", "down",
+]
+
+
+def _extract_steer(text: str) -> str:
+    last_sentence = text.split(".")[-1].strip().lower()
+    for word in _DIRECTION_WORDS:
+        if word in last_sentence:
+            return last_sentence
+    return ""
 
 
 @app.get("/detect", response_model=DetectResponse)
 def detect():
     raw = _ask_vlm(DETECT_PROMPT)
-    detail = ""
-    steer = ""
-    lines = raw.split("\n")
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        if line.startswith("DETAIL:"):
-            parts = []
-            i += 1
-            while i < len(lines) and not lines[i].startswith("STEER:"):
-                parts.append(lines[i])
-                i += 1
-            detail = "\n".join(parts).strip()
-        elif line.startswith("STEER:"):
-            steer = line.removeprefix("STEER:").strip()
-            i += 1
-        else:
-            i += 1
-    return DetectResponse(detail=detail or raw, steer=steer)
+    return DetectResponse(detail=raw, steer=_extract_steer(raw))
 
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
-    prompt = req.prompt.strip()
-    if not prompt.endswith("STEER:"):
-        prompt += "\nDETAIL:\nSTEER:"
-    answer = _ask_vlm(prompt)
+    answer = _ask_vlm(req.prompt)
     return AskResponse(answer=answer)
 
 
@@ -146,7 +162,7 @@ async def transcribe(audio: UploadFile = File(...)):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "model": "moondream2"}
+    return {"status": "ok", "model": f"gemma-4-e4b-it (via Gemini API)"}
 
 
 @app.on_event("shutdown")

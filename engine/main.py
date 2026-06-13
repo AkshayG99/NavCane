@@ -103,21 +103,29 @@ def ask(req: AskRequest):
 
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...)):
-    from pydub import AudioSegment
-    import io
+    import subprocess, tempfile, os, wave, io
 
     data = await audio.read()
-    seg = AudioSegment.from_file(io.BytesIO(data))
-    seg = seg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
 
-    raw = io.BytesIO()
-    seg.export(raw, format="wav")
-    raw.seek(0)
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
 
-    import wave
-    with wave.open(raw, "rb") as wav:
-        frames = wav.readframes(wav.getnframes())
-    audio_arr = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+    wav_path = tmp_path + ".wav"
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1",
+             "-sample_fmt", "s16", wav_path],
+            capture_output=True, check=True,
+        )
+
+        with wave.open(wav_path, "rb") as wav:
+            frames = wav.readframes(wav.getnframes())
+        audio_arr = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+    finally:
+        os.unlink(tmp_path)
+        if os.path.exists(wav_path):
+            os.unlink(wav_path)
 
     result = _whisper.transcribe(audio_arr, language="en")
     return {"text": result["text"].strip()}

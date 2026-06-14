@@ -273,7 +273,7 @@ body {
       <div class="settings-panel" id="settingsPanel">
         <h3>Voice Settings</h3>
         <label for="apiKeyInput">ElevenLabs API Key</label>
-        <input type="password" id="apiKeyInput" placeholder="sk_..." value="sk_5a7aece3d8b30d3909a939a13e3a6488abff69f0adb77f20">
+        <input type="password" id="apiKeyInput" placeholder="sk_..." value="sk_1039e2421ea3e171de6ff0e5784756651d2966a2a855df22">
         <label for="voiceSelect">Voice</label>
         <select id="voiceSelect">
           <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
@@ -426,11 +426,16 @@ let elevenLabsKey = '';
 let elevenLabsVoice = '21m00Tcm4TlvDq8ikWAM';
 let elevenLabsChars = 0;
 
+const DEFAULT_ELEVEN_KEY = 'sk_1039e2421ea3e171de6ff0e5784756651d2966a2a855df22';
+
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('ally_settings') || '{}');
-    elevenLabsKey = s.key || ''; elevenLabsVoice = s.voice || '21m00Tcm4TlvDq8ikWAM'; elevenLabsChars = s.chars || 0;
-    apiKeyInput.value = elevenLabsKey; voiceSelect.value = elevenLabsVoice;
+    elevenLabsKey = s.key || DEFAULT_ELEVEN_KEY;
+    elevenLabsVoice = s.voice || '21m00Tcm4TlvDq8ikWAM';
+    elevenLabsChars = s.chars || 0;
+    apiKeyInput.value = elevenLabsKey;
+    voiceSelect.value = elevenLabsVoice;
     charStat.textContent = `${elevenLabsChars} chars used`;
   } catch (e) {}
 }

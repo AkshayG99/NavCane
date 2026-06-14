@@ -852,7 +852,7 @@ const BUILDINGS = [
 function initMap() {
   if (mapInitialized) { map.invalidateSize(); return; }
   mapInitialized = true;
-  map = L.map('map', { zoomControl: false }).setView([43.4723, -80.5449], 16);
+  map = L.map('map', { zoomControl: false }).setView([43.4687, -80.5449], 17);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   for (const b of BUILDINGS) {

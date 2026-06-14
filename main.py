@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -311,9 +311,13 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
 
 
 @app.post("/api/tts")
-async def text_to_speech(request: dict):
-    text = request.get("text", "")
-    voice_id = request.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+async def text_to_speech(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return StreamingResponse(iter(["invalid json"]), media_type="text/plain", status_code=400)
+    text = body.get("text", "")
+    voice_id = body.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
     if not text:
         return StreamingResponse(iter(["no text"]), media_type="text/plain", status_code=400)
     if not eleven_client:

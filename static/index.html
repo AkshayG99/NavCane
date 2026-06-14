@@ -650,6 +650,7 @@ async function speakWithElevenLabs(text, onDone) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voice_id: elevenLabsVoice }),
     });
+    if (res.status === 402) { voiceStatus.textContent = 'Voice needs paid ElevenLabs plan. Using browser voice.'; voiceStatus.className = 'status-err'; throw new Error('paid plan required'); }
     if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`TTS ${res.status}: ${e}`); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);

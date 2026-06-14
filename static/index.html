@@ -274,6 +274,7 @@ body {
         <h3>Voice Settings</h3>
         <label for="voiceSelect">Voice</label>
         <select id="voiceSelect">
+          <option value="default">Account default</option>
           <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
           <option value="EXAVITQu4vrVxn66s0DB">Bella</option>
           <option value="ThT5KcBeYPX3keUQqPhg">Chris</option>
@@ -413,7 +414,7 @@ let lastDetections = [];
 let activeTab = 'camera';
 
 // ---- ElevenLabs (server-side, key in backend) ----
-let elevenLabsVoice = localStorage.getItem('ally_voice') || '21m00Tcm4TlvDq8ikWAM';
+let elevenLabsVoice = localStorage.getItem('ally_voice') || 'default';
 voiceSelect.value = elevenLabsVoice;
 function saveVoice() {
   elevenLabsVoice = voiceSelect.value;

@@ -325,12 +325,11 @@ async def text_to_speech(request: Request):
         return StreamingResponse(iter(["no key"]), media_type="text/plain", status_code=400)
 
     try:
-        audio_iter = eleven_client.text_to_speech.convert(
-            text=text,
-            voice_id=voice_id,
-            model_id="eleven_v3",
-            output_format="mp3_44100_128",
-        )
+        # If voice_id is "default", don't send it — use account default
+        kwargs = dict(text=text, model_id="eleven_v3", output_format="mp3_44100_128")
+        if voice_id and voice_id != "default":
+            kwargs["voice_id"] = voice_id
+        audio_iter = eleven_client.text_to_speech.convert(**kwargs)
 
         def generate():
             for chunk in audio_iter:

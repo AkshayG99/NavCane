@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ally — Voice Navigation Guide</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: #07070a; color: #e0e0e0; height: 100vh; overflow: hidden;
+  user-select: none; -webkit-user-select: none;
+}
+.app {
+  display: flex; flex-direction: column; height: 100vh; max-width: 1400px; margin: 0 auto;
+}
+
+/* ---- HEADER ---- */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: linear-gradient(135deg, #12121e 0%, #1a1a2e 100%);
+  border-bottom: 1px solid rgba(108,140,255,0.15); flex-shrink: 0; position: relative;
+}
+header h1 {
+  font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #fff 0%, #a0b4ff 100%); -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; background-clip: text;
+}
+.status-bar { display: flex; gap: 8px; align-items: center; }
+.badge {
+  padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.3px; display: flex; align-items: center; gap: 5px;
+}
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.badge-green { background: rgba(74,222,128,0.12); color: #4ade80; }
+.badge-green::before { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+.badge-red { background: rgba(248,113,113,0.12); color: #f87171; }
+.badge-red::before { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
+.badge-yellow { background: rgba(251,191,36,0.12); color: #fbbf24; }
+.badge-yellow::before { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.5); }
+.badge-blue { background: rgba(96,165,250,0.12); color: #60a5fa; }
+.badge-blue::before { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.5); }
+.detection-badge { color: #888; font-size: 11px; font-weight: 500; min-width: 36px; text-align: center; }
+.settings-btn {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  color: #666; border-radius: 8px; padding: 6px 10px; font-size: 16px;
+  cursor: pointer; line-height: 1; transition: all 0.2s;
+}
+.settings-btn:hover { color: #fff; border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); }
+
+/* ---- SETTINGS PANEL ---- */
+.settings-panel {
+  display: none; position: absolute; top: calc(100% + 8px); right: 0; z-index: 100;
+  background: rgba(26,26,40,0.96); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 20px; width: 340px;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.6); backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.settings-panel.open { display: block; }
+.settings-panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #fff; }
+.settings-panel label { display: block; font-size: 11px; font-weight: 500; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.settings-panel input, .settings-panel select {
+  width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.3); color: #e0e0e0; font-size: 13px; margin-bottom: 14px;
+  outline: none; transition: border-color 0.2s;
+}
+.settings-panel input:focus, .settings-panel select:focus { border-color: rgba(108,140,255,0.5); }
+.settings-panel .row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.settings-panel .stat { font-size: 11px; color: #555; }
+.settings-panel .btn {
+  padding: 8px 20px; border-radius: 8px; border: none; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+}
+.settings-panel .btn-primary { background: #6c8cff; color: #fff; }
+.settings-panel .btn-primary:hover { background: #5a7aee; }
+.settings-panel .btn-primary:disabled { opacity: 0.4; cursor: default; }
+.settings-panel .btn-sm { padding: 6px 14px; font-size: 11px; }
+.settings-panel .status-ok { color: #4ade80; font-size: 11px; }
+.settings-panel .status-err { color: #f87171; font-size: 11px; }
+.settings-panel .hint { font-size: 11px; color: #555; }
+
+/* ---- MAIN ---- */
+.main { display: flex; flex: 1; flex-direction: column; overflow: hidden; position: relative; }
+
+/* ---- CAMERA ---- */
+.camera-section { flex: 1; display: flex; flex-direction: column; padding: 10px 14px 4px; min-height: 0; }
+.video-container {
+  position: relative; flex: 1; background: #000; border-radius: 14px; overflow: hidden;
+  min-height: 200px; box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.4);
+}
+.video-container video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.video-container canvas {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+}
+
+/* ---- PLACEHOLDER ---- */
+.placeholder {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center; width: 100%; padding: 0 24px;
+}
+.placeholder-icon {
+  font-size: 64px; margin-bottom: 16px; opacity: 0.6;
+}
+.placeholder-text { color: #555; font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+.placeholder-sub { color: #444; font-size: 12px; margin-bottom: 24px; }
+.placeholder button {
+  padding: 18px 48px; background: linear-gradient(135deg, #6c8cff 0%, #5a7aee 100%);
+  color: #fff; border: none; border-radius: 14px; font-size: 20px; font-weight: 600;
+  cursor: pointer; min-width: 220px; touch-action: manipulation;
+  box-shadow: 0 4px 20px rgba(108,140,255,0.3); transition: all 0.2s;
+}
+.placeholder button:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(108,140,255,0.4); }
+.placeholder button:active { transform: scale(0.97); }
+
+/* ---- CAMERA FOOTER ---- */
+.camera-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 10px;
+  margin-top: 6px; font-size: 11px; flex-shrink: 0;
+}
+.camera-footer .stat-group { display: flex; gap: 16px; }
+.camera-footer .stat-item { display: flex; align-items: center; gap: 5px; color: #555; }
+.camera-footer .stat-item .dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+.camera-footer .stat-item .dot.on { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.4); }
+.camera-footer .stat-item .dot.off { background: #444; }
+
+/* ---- INTERACTION ---- */
+.interaction-section {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 20px 20px; flex-shrink: 0; gap: 10px;
+}
+
+/* ---- TRANSCRIPT ---- */
+.transcript {
+  width: 100%; max-width: 500px; min-height: 48px; max-height: 90px; overflow-y: auto;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px; padding: 12px 16px; font-size: 14px; line-height: 1.5;
+  color: #555; text-align: center;
+}
+.transcript.has-text { color: #ccc; }
+.transcript-placeholder { color: #444; font-size: 13px; }
+.transcript-question { color: #8ca4ff; font-weight: 500; }
+.transcript-answer { color: #c0c0d0; }
+
+/* ---- MIC ---- */
+.mic-container { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mic-button {
+  width: 88px; height: 88px; border-radius: 50%; border: none; cursor: pointer;
+  background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.3s; -webkit-tap-highlight-color: transparent;
+  position: relative; touch-action: manipulation;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.mic-button:active { transform: scale(0.92); }
+.mic-button .mic-icon { width: 38px; height: 38px; fill: #555; transition: fill 0.3s; }
+
+.mic-button.listening {
+  background: linear-gradient(135deg, #3a1515 0%, #4a1a1a 100%);
+  box-shadow: 0 0 0 6px rgba(248,113,113,0.15), 0 4px 20px rgba(248,113,113,0.1);
+}
+.mic-button.listening .mic-icon { fill: #f87171; }
+.mic-button.listening::before {
+  content: ''; position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid rgba(248,113,113,0.15);
+  animation: ring-expand 1.5s ease-out infinite;
+}
+
+.mic-button.processing {
+  background: linear-gradient(135deg, #3a3510 0%, #4a4415 100%);
+  box-shadow: 0 0 0 6px rgba(251,191,36,0.15), 0 4px 20px rgba(251,191,36,0.1);
+}
+.mic-button.processing .mic-icon { fill: #fbbf24; }
+.mic-button.processing::before {
+  content: ''; position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid rgba(251,191,36,0.15);
+  animation: ring-expand 1.5s ease-out infinite;
+}
+
+.mic-button.speaking {
+  background: linear-gradient(135deg, #0f2a1a 0%, #143a22 100%);
+  box-shadow: 0 0 0 6px rgba(74,222,128,0.15), 0 4px 20px rgba(74,222,128,0.1);
+}
+.mic-button.speaking .mic-icon { fill: #4ade80; }
+.mic-button.speaking::before {
+  content: ''; position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid rgba(74,222,128,0.15);
+  animation: ring-expand 1.5s ease-out infinite;
+}
+
+@keyframes ring-expand {
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+.mic-status { font-size: 13px; color: #555; text-align: center; min-height: 18px; transition: color 0.3s; }
+.mic-status.active { color: #f87171; }
+
+.detection-overlay { display: none; }
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 600px) {
+  header { padding: 10px 14px; }
+  header h1 { font-size: 16px; }
+  .status-bar { gap: 6px; }
+  .badge { padding: 3px 10px; font-size: 10px; }
+  .settings-panel { width: calc(100vw - 28px); right: -8px; }
+  .mic-button { width: 76px; height: 76px; }
+  .mic-button .mic-icon { width: 32px; height: 32px; }
+  .camera-section { padding: 6px 10px 2px; }
+  .interaction-section { padding: 6px 14px 14px; }
+  .placeholder-icon { font-size: 48px; }
+  .placeholder button { padding: 16px 36px; font-size: 17px; min-width: 180px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Ally</h1>
+    <div class="status-bar">
+      <span class="badge badge-yellow" id="modelBadge">Model: --</span>
+      <span class="badge badge-red" id="personBadge">Person</span>
+      <span class="detection-badge" id="detectionCount">0</span>
+      <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+      <div class="settings-panel" id="settingsPanel">
+        <h3>Voice Settings</h3>
+        <label for="apiKeyInput">ElevenLabs API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="sk_..." value="sk_5a7aece3d8b30d3909a939a13e3a6488abff69f0adb77f20">
+        <label for="voiceSelect">Voice</label>
+        <select id="voiceSelect">
+          <option value="21m00Tcm4TlvDq8ikWAM">Rachel (default)</option>
+          <option value="EXAVITQu4vrVxn66s0DB">Bella</option>
+          <option value="ThT5KcBeYPX3keUQqPhg">Chris</option>
+          <option value="TxGEqnHWrfWFTfGW9XjX">Josh</option>
+          <option value="pNInz6obpgDQGcXmaG0Q">Adam</option>
+          <option value="AZnzlk1XvdvUeBnXmlld">Antoni</option>
+          <option value="VR6AewLTigWG4x3GB5nY">Patrick</option>
+          <option value="ErXwobaYiN019PkySvjV">Antoni (British)</option>
+        </select>
+        <div class="row">
+          <span class="stat" id="charStat">0 chars used</span>
+          <button class="btn btn-sm btn-primary" id="testVoiceBtn">Test</button>
+        </div>
+        <div id="voiceStatus"></div>
+        <div class="row">
+          <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
+          <span class="hint">Falls back to browser TTS</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="camera-section">
+      <div class="video-container" id="videoContainer">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="placeholder" id="placeholder">
+          <div class="placeholder-icon">📷</div>
+          <div class="placeholder-text">Camera not started</div>
+          <div class="placeholder-sub">Position your phone at chest height</div>
+          <button id="startCameraBtn">Start Camera</button>
+        </div>
+      </div>
+      <div class="camera-footer">
+        <div class="stat-group">
+          <span class="stat-item"><span class="dot off" id="camDot"></span><span id="cameraStatus">Off</span></span>
+          <span class="stat-item" id="fpsDisplay">Detection: --</span>
+        </div>
+        <span class="stat-item" id="objCount">0 objects</span>
+      </div>
+    </div>
+
+    <div class="interaction-section">
+      <div class="transcript" id="transcript">
+        <div class="transcript-placeholder" id="transcriptPlaceholder">Navigation guidance active. Tap mic to ask a question.</div>
+      </div>
+      <div class="mic-container">
+        <button id="micBtn" class="mic-button" aria-label="Tap to speak">
+          <svg viewBox="0 0 24 24" class="mic-icon">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+        <div class="mic-status" id="micStatus">Tap to speak</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- DOM refs ----
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const placeholder = document.getElementById('placeholder');
+const startBtn = document.getElementById('startCameraBtn');
+const transcript = document.getElementById('transcript');
+const transcriptPlaceholder = document.getElementById('transcriptPlaceholder');
+const micBtn = document.getElementById('micBtn');
+const micStatus = document.getElementById('micStatus');
+const modelBadge = document.getElementById('modelBadge');
+const personBadge = document.getElementById('personBadge');
+const detectionCount = document.getElementById('detectionCount');
+const fpsDisplay = document.getElementById('fpsDisplay');
+const cameraStatus = document.getElementById('cameraStatus');
+const objCount = document.getElementById('objCount');
+const camDot = document.getElementById('camDot');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const apiKeyInput = document.getElementById('apiKeyInput');
+const voiceSelect = document.getElementById('voiceSelect');
+const charStat = document.getElementById('charStat');
+const testVoiceBtn = document.getElementById('testVoiceBtn');
+const voiceStatus = document.getElementById('voiceStatus');
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+
+let mediaStream = null;
+let detectionInterval = null;
+let isStreaming = false;
+let lastDetections = [];
+
+// ---- ElevenLabs Settings ----
+let elevenLabsKey = '';
+let elevenLabsVoice = '21m00Tcm4TlvDq8ikWAM';
+let elevenLabsChars = 0;
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ally_settings') || '{}');
+    elevenLabsKey = saved.key || '';
+    elevenLabsVoice = saved.voice || '21m00Tcm4TlvDq8ikWAM';
+    elevenLabsChars = saved.chars || 0;
+    apiKeyInput.value = elevenLabsKey;
+    voiceSelect.value = elevenLabsVoice;
+    charStat.textContent = `${elevenLabsChars} chars used`;
+  } catch (e) {}
+}
+function saveSettings() {
+  elevenLabsKey = apiKeyInput.value.trim();
+  elevenLabsVoice = voiceSelect.value;
+  localStorage.setItem('ally_settings', JSON.stringify({
+    key: elevenLabsKey, voice: elevenLabsVoice, chars: elevenLabsChars,
+  }));
+  voiceStatus.textContent = 'Saved.';
+  voiceStatus.className = 'status-ok';
+  setTimeout(() => { voiceStatus.textContent = ''; }, 2000);
+}
+loadSettings();
+if (apiKeyInput.value && !elevenLabsKey) saveSettings();
+
+// ---- State machine ----
+const STATE = { IDLE: 0, LISTENING: 1, PROCESSING: 2, SPEAKING: 3 };
+let state = STATE.IDLE;
+let abortController = null;
+
+// ---- Tracking & Smoothing ----
+let smoothedDetections = [];
+const SMOOTH_ALPHA = 0.35;
+
+const CLASS_COLORS = {
+  person: '#ff4444', bicycle: '#ff8800', car: '#ffaa00', motorcycle: '#ff8800',
+  bus: '#ff6600', truck: '#ff6600', bottle: '#44ccff', cup: '#44ccff',
+  'wine glass': '#44ccff', chair: '#88ff44', couch: '#88ff44', bench: '#88ff44',
+  'dining table': '#88ff44', 'potted plant': '#44ff88', book: '#ff44ff',
+  'cell phone': '#44ffcc', laptop: '#44ffcc', tv: '#44ffcc', remote: '#44ffcc',
+  keyboard: '#44ffcc', mouse: '#44ffcc', backpack: '#ff88ff', umbrella: '#ff88ff',
+  handbag: '#ff88ff', suitcase: '#ff88ff', 'stop sign': '#ff3333',
+  'traffic light': '#ff3333', 'fire hydrant': '#ff3333', bed: '#88aaff',
+  bird: '#aaff88', cat: '#aaff88', dog: '#aaff88', horse: '#aaff88',
+  bowl: '#44ccff', banana: '#ffee44', apple: '#ff4444',
+  sandwich: '#ffaa44', orange: '#ff8800', carrot: '#ff8800',
+  cake: '#ff88cc', donut: '#ff88cc', pizza: '#ffaa44',
+};
+
+function getClassColor(label) {
+  return CLASS_COLORS[label] || '#44ff88';
+}
+
+function matchAndSmooth(rawDetections) {
+  const matched = new Set();
+  for (const nd of rawDetections) {
+    const ncx = (nd.bbox[0] + nd.bbox[2]) / 2;
+    const ncy = (nd.bbox[1] + nd.bbox[3]) / 2;
+    let best = null;
+    let bestDist = Infinity;
+    for (const sd of smoothedDetections) {
+      if (nd.label !== sd.label) continue;
+      if (matched.has(sd)) continue;
+      const scx = (sd.bbox[0] + sd.bbox[2]) / 2;
+      const scy = (sd.bbox[1] + sd.bbox[3]) / 2;
+      const d = Math.hypot(ncx - scx, ncy - scy);
+      if (d < bestDist && d < 120) {
+        bestDist = d;
+        best = sd;
+      }
+    }
+    if (best) {
+      for (let i = 0; i < 4; i++) {
+        best.bbox[i] = best.bbox[i] * (1 - SMOOTH_ALPHA) + nd.bbox[i] * SMOOTH_ALPHA;
+      }
+      best.confidence = nd.confidence;
+      matched.add(best);
+    } else {
+      const newSd = { bbox: [...nd.bbox], confidence: nd.confidence, label: nd.label };
+      smoothedDetections.push(newSd);
+      matched.add(newSd);
+    }
+  }
+  smoothedDetections = smoothedDetections.filter(sd => matched.has(sd));
+}
+
+// ---- Audio cues ----
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, duration, type = 'sine') {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = type;
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) { /* audio context may not be ready */ }
+}
+
+function beepStart() { playTone(400, 0.15); }
+function beepCaptured() { playTone(660, 0.08); setTimeout(() => playTone(880, 0.1), 100); }
+function beepDone() { playTone(660, 0.1); }
+function beepError() { playTone(300, 0.3, 'sawtooth'); }
+
+// ---- Camera ----
+async function startCamera() {
+  speakText('Starting camera.');
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'environment' },
+      audio: false,
+    });
+    video.srcObject = mediaStream;
+    placeholder.style.display = 'none';
+    cameraStatus.textContent = 'On';
+    camDot.className = 'dot on';
+    await video.play();
+    overlay.width = video.videoWidth || 640;
+    overlay.height = video.videoHeight || 480;
+    startDetectionLoop();
+    setState(STATE.IDLE);
+  } catch (err) {
+    console.error('Camera error:', err);
+    speakText('Camera access denied. Please allow camera permissions.');
+  }
+}
+
+startBtn.addEventListener('click', startCamera);
+
+// ---- Detection Loop (smoothed) ----
+async function runDetection() {
+  if (video.readyState < 2) return;
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (w === 0 || h === 0) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, w, h);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.7));
+  if (!blob) return;
+  const formData = new FormData();
+  formData.append('file', blob, 'frame.jpg');
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/api/detect', { method: 'POST', body: formData });
+    const data = await res.json();
+    lastDetections = data.detections || [];
+    matchAndSmooth(lastDetections);
+    drawOverlay(w, h, smoothedDetections, data.person || false);
+    const elapsed = (performance.now() - t0).toFixed(0);
+    fpsDisplay.textContent = `${elapsed}ms`;
+    detectionCount.textContent = `${smoothedDetections.length}`;
+    objCount.textContent = `${smoothedDetections.length} object${smoothedDetections.length !== 1 ? 's' : ''}`;
+    personBadge.textContent = data.person ? 'Person' : 'Person';
+    personBadge.className = `badge ${data.person ? 'badge-red' : 'badge-green'}`;
+  } catch (err) {
+    console.error('Detection error:', err);
+  }
+}
+
+function drawOverlay(w, h, detections, person) {
+  overlay.width = w;
+  overlay.height = h;
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  for (const d of detections) {
+    const [x1, y1, x2, y2] = d.bbox;
+    const color = getClassColor(d.label);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    ctx.shadowBlur = 0;
+    const label = `${d.label} ${(d.confidence * 100).toFixed(0)}%`;
+    ctx.font = 'bold 13px sans-serif';
+    const fm = ctx.measureText(label);
+    const lh = 22;
+    ctx.fillStyle = color;
+    ctx.fillRect(x1, y1 - lh, fm.width + 10, lh);
+    ctx.fillStyle = '#000';
+    ctx.fillText(label, x1 + 5, y1 - 6);
+  }
+}
+
+function startDetectionLoop() {
+  if (detectionInterval) clearInterval(detectionInterval);
+  detectionInterval = setInterval(runDetection, 800);
+  setTimeout(runDetection, 100);
+  startNavigation();
+}
+
+// ---- Speech Queue (ElevenLabs + browser fallback) ----
+let speechQueue = [];
+let speechActive = false;
+let currentAudio = null;
+let responseBuffer = '';
+let spokenIndex = 0;
+let streamComplete = false;
+
+// ---- Continuous Navigation ----
+let lastNavTime = 0;
+let lastNavSignature = '';
+
+function speakText(text) {
+  if (!text) return;
+  speechQueue.push(text);
+  processSpeechQueue();
+}
+
+function processSpeechQueue() {
+  if (speechActive || speechQueue.length === 0) return;
+  speechActive = true;
+  const text = speechQueue.shift();
+  setState(STATE.SPEAKING);
+  if (elevenLabsKey) {
+    speakWithElevenLabs(text, onSpeechDone);
+  } else {
+    speakWithBrowser(text, onSpeechDone);
+  }
+}
+
+function onSpeechDone() {
+  speechActive = false;
+  if (speechQueue.length === 0) setState(STATE.IDLE);
+  processSpeechQueue();
+}
+
+function speakWithBrowser(text, onDone) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.0;
+  utterance.onend = onDone;
+  utterance.onerror = () => { speechQueue = []; speechActive = false; setState(STATE.IDLE); };
+  window.speechSynthesis.speak(utterance);
+}
+
+async function speakWithElevenLabs(text, onDone) {
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoice}/stream`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': elevenLabsKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_turbo_v2',
+        voice_settings: { stability: 0.35, similarity_boost: 0.75 },
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`ElevenLabs ${res.status}: ${errText}`);
+    }
+    const blob = await res.blob();
+    elevenLabsChars += text.length;
+    charStat.textContent = `${elevenLabsChars} chars used`;
+    const saved = JSON.parse(localStorage.getItem('ally_settings') || '{}');
+    saved.chars = elevenLabsChars;
+    localStorage.setItem('ally_settings', JSON.stringify(saved));
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.onended = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
+    audio.onerror = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
+    await audio.play();
+  } catch (e) {
+    console.error('ElevenLabs error:', e);
+    speakWithBrowser(text, onDone);
+  }
+}
+
+async function testElevenLabs() {
+  const key = apiKeyInput.value.trim();
+  if (!key) { voiceStatus.textContent = 'Enter an API key first.'; voiceStatus.className = 'status-err'; return; }
+  voiceStatus.textContent = 'Testing...';
+  voiceStatus.className = '';
+  testVoiceBtn.disabled = true;
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceSelect.value}/stream`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Hello, this is a test of my voice.',
+        model_id: 'eleven_turbo_v2',
+        voice_settings: { stability: 0.35, similarity_boost: 0.75 },
+      }),
+    });
+    if (!res.ok) throw new Error(`Status ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => { URL.revokeObjectURL(url); };
+    await audio.play();
+    voiceStatus.textContent = 'Working!';
+    voiceStatus.className = 'status-ok';
+  } catch (e) {
+    voiceStatus.textContent = `Failed: ${e.message}`;
+    voiceStatus.className = 'status-err';
+  }
+  testVoiceBtn.disabled = false;
+}
+
+function processToken(token) {
+  responseBuffer += token;
+  const unspoken = responseBuffer.slice(spokenIndex);
+  if (!unspoken.length) return;
+
+  let lastBreak = -1;
+  for (let i = 0; i < unspoken.length; i++) {
+    if ('.!?'.includes(unspoken[i]) && (i === unspoken.length - 1 || unspoken[i + 1] === ' ')) {
+      lastBreak = i + 1;
+    }
+  }
+
+  if (lastBreak > 0) {
+    speakText(unspoken.slice(0, lastBreak));
+    spokenIndex += lastBreak;
+  }
+}
+
+function finishStream() {
+  streamComplete = true;
+  const remaining = responseBuffer.slice(spokenIndex);
+  if (remaining.trim()) {
+    speakText(remaining);
+  } else if (speechQueue.length === 0) {
+    setState(STATE.IDLE);
+  }
+}
+
+// ---- State Management ----
+function setState(newState, statusText) {
+  state = newState;
+  micBtn.className = 'mic-button';
+  if (state === STATE.IDLE) {
+    micStatus.textContent = statusText || 'Tap to speak';
+    micStatus.className = 'mic-status';
+    micBtn.setAttribute('aria-label', 'Tap for question');
+  } else if (state === STATE.LISTENING) {
+    micBtn.classList.add('listening');
+    micStatus.textContent = statusText || 'Listening...';
+    micStatus.className = 'mic-status active';
+    micBtn.setAttribute('aria-label', 'Listening');
+  } else if (state === STATE.PROCESSING) {
+    micBtn.classList.add('processing');
+    micStatus.textContent = statusText || 'Thinking...';
+    micStatus.className = 'mic-status';
+    micBtn.setAttribute('aria-label', 'Processing');
+  } else if (state === STATE.SPEAKING) {
+    micBtn.classList.add('speaking');
+    micStatus.textContent = statusText || 'Speaking...';
+    micStatus.className = 'mic-status';
+    micBtn.setAttribute('aria-label', 'Speaking');
+  }
+}
+
+function updateTranscript(question, answer) {
+  transcript.classList.add('has-text');
+  transcript.innerHTML = '';
+  if (question) {
+    const q = document.createElement('div');
+    q.className = 'transcript-question';
+    q.textContent = question;
+    transcript.appendChild(q);
+  }
+  if (answer) {
+    const a = document.createElement('div');
+    a.className = 'transcript-answer';
+    a.textContent = answer;
+    transcript.appendChild(a);
+  }
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function clearTranscript() {
+  transcript.classList.remove('has-text');
+  transcript.innerHTML = '<div class="transcript-placeholder">Tap the microphone and ask a question.</div>';
+}
+
+// ---- Speech Recognition ----
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+
+function startListening() {
+  if (!SpeechRecognitionAPI) {
+    setState(STATE.IDLE, 'Speech not supported');
+    beepError();
+    return;
+  }
+  if (!mediaStream) {
+    setState(STATE.IDLE, 'Start camera first');
+    beepError();
+    return;
+  }
+  if (isStreaming) return;
+
+  stopSpeaking();
+  setState(STATE.LISTENING);
+  beepStart();
+
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript.trim();
+    if (text) {
+      beepCaptured();
+      setState(STATE.PROCESSING);
+      askQuestion(text);
+    } else {
+      setState(STATE.IDLE, 'No speech heard');
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn('Speech error:', e.error);
+    if (e.error === 'no-speech') {
+      setState(STATE.IDLE, 'No speech heard. Try again.');
+    } else if (e.error === 'aborted') {
+      if (state === STATE.LISTENING) setState(STATE.IDLE);
+    } else {
+      beepError();
+      setState(STATE.IDLE, 'Speech error. Try again.');
+    }
+  };
+
+  recognition.onend = () => {
+    if (state === STATE.LISTENING) {
+      setState(STATE.IDLE, 'No speech heard. Try again.');
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (e) {
+    setState(STATE.IDLE, 'Speech error. Try again.');
+    beepError();
+  }
+}
+
+function stopListening() {
+  if (recognition) {
+    try { recognition.abort(); } catch (e) {}
+    recognition = null;
+  }
+  if (state === STATE.LISTENING) {
+    setState(STATE.IDLE);
+  }
+}
+
+// ---- Speech Synthesis ----
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  window.speechSynthesis.cancel();
+  speechQueue = [];
+  speechActive = false;
+  responseBuffer = '';
+  spokenIndex = 0;
+  streamComplete = false;
+  lastNavSignature = '';
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  isStreaming = false;
+}
+
+// ---- Ask ----
+async function captureFrame() {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (w === 0 || h === 0) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, w, h);
+  return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+}
+
+function navSignature(detections) {
+  if (!detections || !detections.length) return 'empty';
+  return detections.map(d => `${d.label[0]}${Math.round(d.bbox[0]/120)}`).sort().join('');
+}
+function generateNavGuidance(detections, frameW) {
+  if (!detections || detections.length === 0) return null;
+
+  const left = [], center = [], right = [];
+  for (const d of detections) {
+    const cx = (d.bbox[0] + d.bbox[2]) / 2;
+    const ratio = cx / frameW;
+    const area = (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1]);
+    const obj = { label: d.label, area };
+    if (ratio < 0.33) left.push(obj);
+    else if (ratio > 0.66) right.push(obj);
+    else center.push(obj);
+  }
+
+  for (const arr of [left, center, right]) arr.sort((a, b) => b.area - a.area);
+
+  const scene = [];
+  if (center.length) {
+    const names = [...new Set(center.map(o => o.label))];
+    scene.push(names.length === 1 ? `${names[0]} ahead` : `${names.slice(0, -1).join(', ')} and ${names.slice(-1)} ahead`);
+  }
+  if (left.length) {
+    const names = [...new Set(left.map(o => o.label))];
+    scene.push(names.length === 1 ? `${names[0]} on your left` : `${names.slice(0, -1).join(', ')} and ${names.slice(-1)} on your left`);
+  }
+  if (right.length) {
+    const names = [...new Set(right.map(o => o.label))];
+    scene.push(names.length === 1 ? `${names[0]} on your right` : `${names.slice(0, -1).join(', ')} and ${names.slice(-1)} on your right`);
+  }
+
+  const desc = scene.join('. ') + '.';
+
+  if (center.length) {
+    const hasClearLeft = !left.length;
+    const hasClearRight = !right.length;
+    if (hasClearLeft && hasClearRight) return `${desc} Stop.`;
+    if (hasClearLeft) return `${desc} Move left.`;
+    if (hasClearRight) return `${desc} Move right.`;
+    const leftLarger = left[0].area > right[0].area;
+    return `${desc} Move ${leftLarger ? 'right' : 'left'}.`;
+  }
+
+  if (left.length && right.length) {
+    return `${desc} Move straight ahead carefully.`;
+  }
+  if (left.length) return `${desc} Move right.`;
+  if (right.length) return `${desc} Move left.`;
+
+  return null;
+}
+
+function runNavigation() {
+  if (speechQueue.length > 0) return;
+  const now = Date.now();
+  if (now - lastNavTime < 8000) return;
+  const w = video.videoWidth;
+  if (w === 0) return;
+  const sig = navSignature(smoothedDetections);
+  if (sig === lastNavSignature) {
+    if (now - lastNavTime > 30000 && sig === 'empty') {
+      lastNavTime = now;
+      speakText('Waiting for objects.');
+    }
+    return;
+  }
+  lastNavSignature = sig;
+  const guidance = generateNavGuidance(smoothedDetections, w);
+  if (guidance) {
+    speakText(guidance);
+    lastNavTime = now;
+  } else if (!smoothedDetections.length) {
+    speakText('Path clear.');
+    lastNavTime = now;
+  }
+}
+
+function startNavigation() {
+  runNavigation();
+  let lastTick = performance.now();
+  function navLoop(now) {
+    if (now - lastTick >= 4000) {
+      lastTick = now;
+      runNavigation();
+    }
+    requestAnimationFrame(navLoop);
+  }
+  requestAnimationFrame(navLoop);
+}
+
+async function askQuestion(question) {
+  if (isStreaming) return;
+  updateTranscript(question, '');
+  modelBadge.textContent = 'Model: thinking...';
+  modelBadge.className = 'badge badge-yellow';
+
+  responseBuffer = '';
+  spokenIndex = 0;
+  streamComplete = false;
+
+  const blob = await captureFrame();
+  if (!blob) {
+    setState(STATE.IDLE, 'Camera error');
+    beepError();
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', blob, 'question.jpg');
+  formData.append('question', question);
+
+  isStreaming = true;
+  abortController = new AbortController();
+
+  try {
+    const res = await fetch('/api/ask', { method: 'POST', body: formData, signal: abortController.signal });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              const modelUsed = data.model || '';
+              const modelLabel = modelUsed.includes('ollama') ? 'Open-Source' : 'Google Vision';
+              modelBadge.textContent = `Model: ${modelLabel}`;
+              modelBadge.className = `badge ${modelUsed.includes('ollama') ? 'badge-blue' : 'badge-green'}`;
+              updateTranscript(question, responseBuffer || '(empty response)');
+            } else if (data.token) {
+              processToken(data.token);
+            }
+          } catch (e) {
+            console.warn('SSE parse error:', e);
+          }
+        }
+      }
+    }
+
+    finishStream();
+
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    console.error('Ask error:', err);
+    updateTranscript(question, `Error: ${err.message}`);
+    beepError();
+    setState(STATE.IDLE, 'Error. Try again.');
+    modelBadge.textContent = 'Model: error';
+    modelBadge.className = 'badge badge-red';
+  }
+
+  isStreaming = false;
+  abortController = null;
+}
+
+// ---- Settings ----
+settingsBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPanel.classList.toggle('open');
+});
+document.addEventListener('click', () => settingsPanel.classList.remove('open'));
+settingsPanel.addEventListener('click', (e) => e.stopPropagation());
+saveSettingsBtn.addEventListener('click', saveSettings);
+testVoiceBtn.addEventListener('click', testElevenLabs);
+
+// ---- Mic button handler ----
+micBtn.addEventListener('click', () => {
+  switch (state) {
+    case STATE.IDLE:
+      startListening();
+      break;
+    case STATE.LISTENING:
+      stopListening();
+      setState(STATE.IDLE);
+      break;
+    case STATE.PROCESSING:
+      break;
+    case STATE.SPEAKING:
+      stopSpeaking();
+      startListening();
+      break;
+  }
+});
+
+micBtn.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+// ---- Prime speech on first interaction ----
+document.addEventListener('click', () => {
+  try {
+    if (window.speechSynthesis) {
+      const p = new SpeechSynthesisUtterance(' ');
+      speechSynthesis.speak(p);
+      speechSynthesis.cancel();
+    }
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+  } catch (e) {}
+}, { once: true });
+
+// ---- Set idle state on load ----
+setState(STATE.IDLE);
+
+// ---- Keyboard shortcut for testing ----
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    micBtn.click();
+  }
+});
+</script>
+</body>
+</html>

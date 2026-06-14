@@ -272,14 +272,27 @@ body {
       <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
       <div class="settings-panel" id="settingsPanel">
         <h3>Voice Settings</h3>
-        <label for="ttsAccent">Voice accent</label>
-        <select id="ttsAccent">
-          <option value="com">English (US)</option>
-          <option value="co.uk">English (UK)</option>
-          <option value="com.au">English (Australia)</option>
-          <option value="ca">English (Canada)</option>
-          <option value="co.in">English (India)</option>
+        <label for="ttsVoice">Google TTS voice</label>
+        <select id="ttsVoice">
+          <option value="">— gTTS (free, no key) —</option>
+          <optgroup label="Neural2 (natural)">
+            <option value="en-US-Neural2-D">English US — Neural2 D (Male)</option>
+            <option value="en-US-Neural2-F">English US — Neural2 F (Female)</option>
+            <option value="en-US-Neural2-J">English US — Neural2 J (Male)</option>
+            <option value="en-GB-Neural2-B">English UK — Neural2 B (Male)</option>
+            <option value="en-GB-Neural2-F">English UK — Neural2 F (Female)</option>
+          </optgroup>
+          <optgroup label="WaveNet (natural)">
+            <option value="en-US-Wavenet-D">English US — WaveNet D (Male)</option>
+            <option value="en-US-Wavenet-F">English US — WaveNet F (Female)</option>
+            <option value="en-GB-Wavenet-B">English UK — WaveNet B (Male)</option>
+            <option value="en-GB-Wavenet-F">English UK — WaveNet F (Female)</option>
+          </optgroup>
         </select>
+        <div style="font-size:11px;color:#94a3b8;margin:-8px 0 12px">
+          Needs a Google Cloud API key with TTS enabled.
+          <a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" rel="noopener">Enable here</a>
+        </div>
         <div class="row">
           <button class="btn btn-sm btn-primary" id="testVoiceBtn">Test voice</button>
         </div>
@@ -380,7 +393,7 @@ const personBadge = document.getElementById('personBadge');
 const detectionCount = document.getElementById('detectionCount');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
-const ttsAccent = document.getElementById('ttsAccent');
+const ttsVoice = document.getElementById('ttsVoice');
 const testVoiceBtn = document.getElementById('testVoiceBtn');
 const voiceStatus = document.getElementById('voiceStatus');
 const micBtn = document.getElementById('micBtn');
@@ -409,11 +422,11 @@ let isStreaming = false;
 let lastDetections = [];
 let activeTab = 'camera';
 
-// ---- TTS (gTTS server-side, free) ----
-const storedAccent = localStorage.getItem('ally_accent') || 'com';
-ttsAccent.value = storedAccent;
-ttsAccent.addEventListener('change', () => {
-  localStorage.setItem('ally_accent', ttsAccent.value);
+// ---- TTS (Google Cloud / gTTS) ----
+const storedVoice = localStorage.getItem('ally_voice') || '';
+ttsVoice.value = storedVoice;
+ttsVoice.addEventListener('change', () => {
+  localStorage.setItem('ally_voice', ttsVoice.value);
 });
 
 // ---- State ----
@@ -641,9 +654,13 @@ function speakWithBrowser(text, onDone) {
 
 async function speakWithElevenLabs(text, onDone) {
   try {
+    const payload = { text };
+    const v = ttsVoice.value;
+    if (v) payload.voice = v;
+    else payload.accent = localStorage.getItem('ally_accent') || 'com';
     const res = await fetch('/api/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, lang: 'en', tld: ttsAccent.value }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`TTS ${res.status}: ${e}`); }
     const blob = await res.blob();
@@ -659,9 +676,13 @@ async function testElevenLabs() {
   voiceStatus.textContent = 'Testing...'; voiceStatus.className = '';
   testVoiceBtn.disabled = true;
   try {
+    const payload = { text: 'Hello, this is a test.' };
+    const v = ttsVoice.value;
+    if (v) payload.voice = v;
+    else payload.accent = localStorage.getItem('ally_accent') || 'com';
     const res = await fetch('/api/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: 'Hello, this is a test.', lang: 'en', tld: ttsAccent.value }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const blob = await res.blob();

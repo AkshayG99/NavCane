@@ -36,6 +36,7 @@ MAX_TOKENS = int(os.getenv("MAX_TOKENS", "128"))
 VLM_IMAGE_MAX = int(os.getenv("VLM_IMAGE_MAX", "480"))
 VLM_JPEG_QUALITY = int(os.getenv("VLM_JPEG_QUALITY", "80"))
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "sk_1039e2421ea3e171de6ff0e5784756651d2966a2a855df22")
+GOOGLE_TTS_API_KEY = os.getenv("GOOGLE_TTS_API_KEY", "")
 
 SYSTEM_PROMPT = (
     "You are Ally, a real-time navigation assistant for a blind user. "
@@ -314,6 +315,8 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
     )
 
 
+GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
+
 @app.post("/api/tts")
 async def text_to_speech(request: Request):
     try:
@@ -321,12 +324,33 @@ async def text_to_speech(request: Request):
     except Exception:
         return StreamingResponse(iter(["invalid json"]), media_type="text/plain", status_code=400)
     text = body.get("text", "")
-    lang = body.get("lang", "en")
-    tld = body.get("tld", "com")
+    voice = body.get("voice", "en-US-Neural2-D")
     if not text:
         return StreamingResponse(iter(["no text"]), media_type="text/plain", status_code=400)
 
-    # Try ElevenLabs first if configured
+    # 1) Try Google Cloud TTS if a key is configured
+    if GOOGLE_TTS_API_KEY:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{GOOGLE_TTS_URL}?key={GOOGLE_TTS_API_KEY}",
+                    json={
+                        "input": {"text": text},
+                        "voice": {"languageCode": voice.split("-", 1)[0], "name": voice},
+                        "audioConfig": {"audioEncoding": "MP3", "speakingRate": 1.0},
+                    },
+                )
+                if resp.is_success:
+                    data = resp.json()
+                    audio_b64 = data.get("audioContent", "")
+                    if audio_b64:
+                        audio_bytes = base64.b64decode(audio_b64)
+                        return StreamingResponse(iter([audio_bytes]), media_type="audio/mpeg", headers={"X-TTS": "google"})
+                logger.warning(f"Google TTS returned {resp.status_code}, falling back")
+        except Exception as e:
+            logger.warning(f"Google TTS error: {e}, falling back")
+
+    # 2) Try ElevenLabs if configured
     if ELEVENLABS_API_KEY:
         voice_id = body.get("voice_id", "")
         if voice_id:
@@ -341,18 +365,17 @@ async def text_to_speech(request: Request):
                         async def gen_el():
                             async for chunk in resp.aiter_bytes():
                                 yield chunk
-                        return StreamingResponse(gen_el(), media_type="audio/mpeg")
-                    logger.warning(f"ElevenLabs returned {resp.status_code}, falling back to gTTS")
+                        return StreamingResponse(gen_el(), media_type="audio/mpeg", headers={"X-TTS": "eleven"})
             except Exception as e:
-                logger.warning(f"ElevenLabs error: {e}, falling back to gTTS")
+                logger.warning(f"ElevenLabs error: {e}, falling back")
 
-    # gTTS fallback (free, no key needed)
+    # 3) gTTS fallback (free, no key needed)
     try:
-        tts = gTTS(text=text, lang=lang, tld=tld)
+        tts = gTTS(text=text, lang="en", tld=body.get("accent", "com"))
         buf = io.BytesIO()
         tts.write_to_fp(buf)
         buf.seek(0)
-        return StreamingResponse(iter([buf.read()]), media_type="audio/mpeg")
+        return StreamingResponse(iter([buf.read()]), media_type="audio/mpeg", headers={"X-TTS": "gtts"})
     except Exception as e:
         logger.error(f"gTTS error: {e}")
         return StreamingResponse(iter([str(e)]), media_type="text/plain", status_code=500)

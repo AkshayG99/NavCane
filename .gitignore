@@ -32,3 +32,4 @@ Thumbs.db
 *.pt
 *.pth
 *.onnx
+server.log

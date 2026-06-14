@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ally — Campus Navigation</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: #f8fafc; color: #0f172a; height: 100vh; overflow: hidden;
+  user-select: none; -webkit-user-select: none;
+}
+.app {
+  width: 100%; height: 100vh; position: relative; overflow: hidden;
+}
+
+/* ---- FLOATING HEADER ---- */
+.floating-header {
+  position: absolute; top: 12px; left: 12px; right: 12px; z-index: 1000;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px; padding: 10px 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+.floating-header h1 {
+  font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;
+}
+.floating-header h1 span { color: #f59e0b; }
+.header-badges { display: flex; align-items: center; gap: 6px; }
+.badge {
+  padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; gap: 5px; border: 1px solid #e2e8f0;
+}
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.badge-green { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.badge-green::before { background: #22c55e; }
+.badge-red { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.badge-red::before { background: #ef4444; }
+.badge-yellow { background: #fffbeb; color: #d97706; border-color: #fde68a; }
+.badge-yellow::before { background: #f59e0b; }
+.badge-blue { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.badge-blue::before { background: #3b82f6; }
+.detection-badge {
+  font-size: 12px; font-weight: 600; color: #64748b; min-width: 28px; text-align: center;
+}
+.settings-btn {
+  background: none; border: 1px solid #e2e8f0; color: #94a3b8; border-radius: 10px;
+  padding: 5px 9px; font-size: 15px; cursor: pointer; line-height: 1;
+  transition: all 0.15s;
+}
+.settings-btn:hover { color: #0f172a; border-color: #cbd5e1; }
+
+/* ---- SETTINGS PANEL ---- */
+.settings-panel {
+  display: none; position: absolute; top: calc(100% + 8px); right: 0; z-index: 1100;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+  padding: 20px; width: 320px; box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+}
+.settings-panel.open { display: block; }
+.settings-panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #0f172a; }
+.settings-panel label {
+  display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.settings-panel input, .settings-panel select {
+  width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0;
+  background: #f8fafc; color: #0f172a; font-size: 13px; margin-bottom: 14px; outline: none;
+}
+.settings-panel input:focus, .settings-panel select:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+.settings-panel .row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.settings-panel .stat { font-size: 11px; color: #94a3b8; }
+.settings-panel .btn {
+  padding: 8px 20px; border-radius: 10px; border: none; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.settings-panel .btn-primary { background: #f59e0b; color: #fff; }
+.settings-panel .btn-primary:hover { background: #d97706; }
+.settings-panel .btn-primary:disabled { opacity: 0.4; cursor: default; }
+.settings-panel .btn-sm { padding: 5px 14px; font-size: 11px; }
+.settings-panel .status-ok { color: #16a34a; font-size: 11px; }
+.settings-panel .status-err { color: #dc2626; font-size: 11px; }
+
+/* ---- MAP (full background) ---- */
+#map {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+}
+
+/* ---- CAMERA PIP ---- */
+.camera-pip {
+  position: absolute; top: 76px; right: 12px; z-index: 900;
+  width: 140px; height: 105px; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.8);
+  background: #000; display: none; transition: all 0.3s ease;
+}
+.camera-pip.active { display: block; }
+.camera-pip.fullscreen {
+  top: 0; left: 0; width: 100%; height: 100%; border-radius: 0;
+  box-shadow: none; z-index: 1;
+}
+.camera-pip video { width: 100%; height: 100%; object-fit: cover; }
+.camera-pip canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.camera-pip .pip-label {
+  position: absolute; bottom: 4px; left: 6px; font-size: 9px; font-weight: 600;
+  color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.6); pointer-events: none;
+}
+
+/* ---- BOTTOM SHEET ---- */
+.bottom-sheet {
+  position: absolute; bottom: 12px; left: 12px; right: 12px; z-index: 1000;
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.8);
+  padding: 14px 16px 12px; max-height: 45vh; display: flex; flex-direction: column;
+}
+
+/* ---- VIEW CONTENT (switches per tab) ---- */
+.view-content { flex: 1; overflow-y: auto; min-height: 0; }
+.view-content::-webkit-scrollbar { width: 3px; }
+.view-content::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+.view-pane { display: none; padding: 2px 0; }
+.view-pane.active { display: block; }
+
+/* Camera pane */
+.camera-sheet-placeholder {
+  background: #f8fafc; border-radius: 14px; padding: 20px; text-align: center;
+}
+.camera-sheet-placeholder .icon { font-size: 32px; margin-bottom: 8px; }
+.camera-sheet-placeholder p { color: #64748b; font-size: 13px; margin-bottom: 14px; }
+.camera-sheet-placeholder button {
+  padding: 10px 28px; background: #f59e0b; color: #fff; border: none;
+  border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.3);
+}
+.camera-sheet-stats { display: flex; gap: 16px; justify-content: center; padding: 4px 0; }
+.camera-sheet-stats .stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.camera-sheet-stats .stat .val { font-size: 18px; font-weight: 700; color: #0f172a; }
+.camera-sheet-stats .stat .lbl { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; }
+
+/* Map pane */
+.map-pane-info { 
+  background: #f8fafc; border-radius: 14px; padding: 10px 14px; margin-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.map-pane-info .bldg { font-weight: 600; font-size: 13px; color: #0f172a; }
+.map-pane-info .detail { font-size: 11px; color: #64748b; }
+.map-pane-info .gps { font-size: 10px; color: #94a3b8; }
+.directions-row {
+  display: flex; gap: 6px; align-items: center; margin-bottom: 6px;
+}
+.directions-row select {
+  flex: 1; padding: 8px 10px; border-radius: 10px; border: 1px solid #e2e8f0;
+  background: #f8fafc; color: #0f172a; font-size: 12px; font-weight: 500; outline: none;
+  -webkit-appearance: none; appearance: none;
+}
+.directions-row select:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+.dir-btn {
+  padding: 8px 14px; border-radius: 10px; border: none; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.dir-btn-primary { background: #f59e0b; color: #fff; }
+.dir-btn-primary:hover { background: #d97706; }
+.dir-btn-primary:disabled { opacity: 0.4; cursor: default; }
+.dir-btn-secondary { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+.dir-btn-secondary:hover { background: #e2e8f0; }
+.directions-info {
+  background: #f8fafc; border-radius: 12px; padding: 8px 12px; margin-bottom: 6px;
+  font-size: 12px; color: #475569; min-height: 0; max-height: 60px; overflow-y: auto;
+  display: none; border: 1px solid #fde68a;
+}
+.directions-info.active { display: block; }
+.directions-info .dir-summary { font-weight: 600; color: #0f172a; margin-bottom: 3px; }
+.directions-info .dir-step { color: #64748b; font-size: 11px; }
+.directions-info .dir-distance { color: #f59e0b; font-weight: 600; font-size: 11px; }
+.directions-info .dir-distance a { color: #2563eb; text-decoration: underline; font-weight: 500; }
+
+/* History pane */
+.history-list { max-height: 180px; overflow-y: auto; }
+.history-list::-webkit-scrollbar { width: 3px; }
+.history-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.history-entry {
+  background: #f8fafc; border-radius: 12px; padding: 10px 12px; margin-bottom: 6px;
+}
+.history-entry .time { font-size: 10px; color: #94a3b8; margin-bottom: 3px; }
+.history-entry .q { color: #f59e0b; font-weight: 600; font-size: 12px; }
+.history-entry .a { color: #475569; font-size: 12px; margin-top: 2px; line-height: 1.4; }
+.history-empty {
+  text-align: center; color: #94a3b8; font-size: 13px; padding: 24px 16px;
+}
+.history-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.history-footer button {
+  background: none; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 12px;
+  color: #94a3b8; font-size: 11px; cursor: pointer;
+}
+.history-footer button:hover { color: #dc2626; border-color: #fecaca; }
+
+/* Transcript bar */
+.transcript-bar {
+  background: #f8fafc; border-radius: 12px; padding: 8px 12px;
+  margin: 4px 0 8px; font-size: 13px; color: #64748b; text-align: center;
+  min-height: 36px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #f1f5f9;
+}
+.transcript-bar.has-answer { color: #475569; border-color: #fde68a; }
+.transcript-bar .q { color: #f59e0b; font-weight: 600; }
+.transcript-bar .sep { margin: 0 6px; color: #cbd5e1; }
+
+/* ---- MIC + TABS ---- */
+.bottom-actions {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+}
+.mic-btn-wrapper {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0;
+}
+.mic-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+  background: #0f172a; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; touch-action: manipulation;
+  box-shadow: 0 4px 12px rgba(15,23,42,0.15);
+}
+.mic-btn:active { transform: scale(0.92); }
+.mic-btn svg { width: 22px; height: 22px; fill: #fff; }
+.mic-btn.listening { background: #dc2626; box-shadow: 0 0 0 4px rgba(220,38,38,0.15); }
+.mic-btn.processing { background: #d97706; box-shadow: 0 0 0 4px rgba(217,119,6,0.15); }
+.mic-btn.speaking { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.15); }
+.mic-label { font-size: 9px; color: #94a3b8; font-weight: 500; }
+
+.tab-row {
+  display: flex; flex: 1; gap: 4px; background: #f1f5f9; border-radius: 12px; padding: 3px;
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: transparent; border: none; color: #94a3b8; font-size: 9px; font-weight: 600;
+  cursor: pointer; padding: 6px 4px; border-radius: 10px; transition: all 0.15s;
+  touch-action: manipulation;
+}
+.tab-btn svg { width: 18px; height: 18px; fill: #94a3b8; transition: fill 0.15s; }
+.tab-btn.active { background: #fff; color: #0f172a; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.tab-btn.active svg { fill: #f59e0b; }
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 600px) {
+  .floating-header { top: 8px; left: 8px; right: 8px; padding: 8px 12px; }
+  .floating-header h1 { font-size: 16px; }
+  .camera-pip { width: 100px; height: 75px; top: 64px; right: 8px; }
+  .bottom-sheet {
+    left: 8px; right: 8px; bottom: 8px; padding: 12px 12px 10px; border-radius: 16px;
+  }
+  .mic-btn { width: 46px; height: 46px; }
+  .mic-btn svg { width: 19px; height: 19px; }
+  .settings-panel { width: calc(100vw - 24px); right: -4px; }
+}
+
+/* ---- Leaflet overrides ---- */
+.leaflet-control-zoom a { background: #fff !important; color: #0f172a !important; border-color: #e2e8f0 !important; }
+.leaflet-control-attribution { font-size: 9px !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- FLOATING HEADER -->
+  <header class="floating-header">
+    <h1><span>Ally</span></h1>
+    <div class="header-badges">
+      <span class="badge badge-yellow" id="modelBadge">Thinking</span>
+      <span class="badge badge-green" id="personBadge">Person</span>
+      <span class="detection-badge" id="detectionCount">0</span>
+      <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+      <div class="settings-panel" id="settingsPanel">
+        <h3>Voice Settings</h3>
+        <label for="ttsVoice">Google TTS voice</label>
+        <select id="ttsVoice">
+          <option value="">— gTTS (free, no key) —</option>
+          <optgroup label="Neural2 (natural)">
+            <option value="en-US-Neural2-D">English US — Neural2 D (Male)</option>
+            <option value="en-US-Neural2-F">English US — Neural2 F (Female)</option>
+            <option value="en-US-Neural2-J">English US — Neural2 J (Male)</option>
+            <option value="en-GB-Neural2-B">English UK — Neural2 B (Male)</option>
+            <option value="en-GB-Neural2-F">English UK — Neural2 F (Female)</option>
+          </optgroup>
+          <optgroup label="WaveNet (natural)">
+            <option value="en-US-Wavenet-D">English US — WaveNet D (Male)</option>
+            <option value="en-US-Wavenet-F">English US — WaveNet F (Female)</option>
+            <option value="en-GB-Wavenet-B">English UK — WaveNet B (Male)</option>
+            <option value="en-GB-Wavenet-F">English UK — WaveNet F (Female)</option>
+          </optgroup>
+        </select>
+        <div style="font-size:11px;color:#94a3b8;margin:-8px 0 12px">
+          Needs a Google Cloud API key with TTS enabled.
+          <a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" rel="noopener">Enable here</a>
+        </div>
+        <div class="row">
+          <button class="btn btn-sm btn-primary" id="testVoiceBtn">Test voice</button>
+        </div>
+        <div id="voiceStatus"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAP (full background) -->
+  <div id="map"></div>
+
+  <!-- CAMERA PIP -->
+  <div class="camera-pip" id="cameraPip">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <div class="pip-label" id="pipLabel">Camera</div>
+  </div>
+
+  <!-- BOTTOM SHEET -->
+  <div class="bottom-sheet" id="bottomSheet">
+    <div class="view-content">
+
+      <!-- Camera pane -->
+      <div class="view-pane active" id="cameraPane">
+        <div id="cameraSheetContent"></div>
+      </div>
+
+      <!-- Map pane -->
+      <div class="view-pane" id="mapPane">
+        <div class="map-pane-info">
+          <div>
+            <div class="bldg" id="nearestBldg">Locating...</div>
+            <div class="detail" id="nearestDist"></div>
+          </div>
+          <div class="gps" id="gpsInfo">--</div>
+        </div>
+        <div class="directions-row">
+          <select id="destSelect"><option value="">Destination...</option></select>
+          <button class="dir-btn dir-btn-primary" id="getDirBtn">Go</button>
+          <button class="dir-btn dir-btn-secondary" id="clearRouteBtn">Clear</button>
+        </div>
+        <div class="directions-info" id="dirInfo"></div>
+      </div>
+
+      <!-- History pane -->
+      <div class="view-pane" id="historyPane">
+        <div class="history-list" id="historyList">
+          <div class="history-empty" id="historyEmpty">No conversations yet.<br>Tap the mic to ask a question.</div>
+        </div>
+        <div class="history-footer">
+          <span style="font-size:11px;color:#94a3b8;" id="historyCount">0 conversations</span>
+          <button id="clearHistoryBtn">Clear</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Transcript -->
+    <div class="transcript-bar" id="transcriptBar">
+      <span id="transcriptText">Navigation active</span>
+    </div>
+
+    <!-- Bottom actions -->
+    <div class="bottom-actions">
+      <div class="mic-btn-wrapper">
+        <button class="mic-btn" id="micBtn" aria-label="Tap to speak">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+        <span class="mic-label" id="micLabel">Tap</span>
+      </div>
+      <div class="tab-row">
+        <button class="tab-btn active" data-tab="camera" aria-label="Camera">
+          <svg viewBox="0 0 24 24"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
+          <span>Camera</span>
+        </button>
+        <button class="tab-btn" data-tab="map" aria-label="Map">
+          <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+          <span>Map</span>
+        </button>
+        <button class="tab-btn" data-tab="history" aria-label="History">
+          <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          <span>History</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- DOM ----
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const modelBadge = document.getElementById('modelBadge');
+const personBadge = document.getElementById('personBadge');
+const detectionCount = document.getElementById('detectionCount');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const ttsVoice = document.getElementById('ttsVoice');
+const testVoiceBtn = document.getElementById('testVoiceBtn');
+const voiceStatus = document.getElementById('voiceStatus');
+const micBtn = document.getElementById('micBtn');
+const micLabel = document.getElementById('micLabel');
+const cameraPip = document.getElementById('cameraPip');
+const pipLabel = document.getElementById('pipLabel');
+const bottomSheet = document.getElementById('bottomSheet');
+const cameraPane = document.getElementById('cameraPane');
+const mapPane = document.getElementById('mapPane');
+const historyPane = document.getElementById('historyPane');
+const cameraSheetContent = document.getElementById('cameraSheetContent');
+const nearestBldg = document.getElementById('nearestBldg');
+const nearestDist = document.getElementById('nearestDist');
+const gpsInfo = document.getElementById('gpsInfo');
+const historyList = document.getElementById('historyList');
+const historyEmpty = document.getElementById('historyEmpty');
+const historyCount = document.getElementById('historyCount');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const transcriptText = document.getElementById('transcriptText');
+const tabBtns = document.querySelectorAll('.tab-btn');
+const viewPanes = document.querySelectorAll('.view-pane');
+
+let mediaStream = null;
+let detectionInterval = null;
+let isStreaming = false;
+let lastDetections = [];
+let activeTab = 'camera';
+
+// ---- TTS (Google Cloud / gTTS) ----
+const storedVoice = localStorage.getItem('ally_voice') || '';
+ttsVoice.value = storedVoice;
+ttsVoice.addEventListener('change', () => {
+  localStorage.setItem('ally_voice', ttsVoice.value);
+});
+
+// ---- State ----
+const STATE = { IDLE: 0, LISTENING: 1, PROCESSING: 2, SPEAKING: 3 };
+let state = STATE.IDLE;
+let abortController = null;
+
+// ---- Tracking ----
+let smoothedDetections = [];
+const SMOOTH_ALPHA = 0.35;
+const CLASS_COLORS = {
+  person: '#ef4444', bicycle: '#f97316', car: '#eab308', motorcycle: '#f97316',
+  bus: '#ea580c', truck: '#ea580c', bottle: '#3b82f6', cup: '#3b82f6',
+  'wine glass': '#3b82f6', chair: '#22c55e', couch: '#22c55e', bench: '#22c55e',
+  'dining table': '#22c55e', 'potted plant': '#10b981', book: '#a855f7',
+  'cell phone': '#06b6d4', laptop: '#06b6d4', tv: '#06b6d4', remote: '#06b6d4',
+  keyboard: '#06b6d4', mouse: '#06b6d4', backpack: '#d946ef', umbrella: '#d946ef',
+  handbag: '#d946ef', suitcase: '#d946ef', 'stop sign': '#ef4444',
+  'traffic light': '#ef4444', 'fire hydrant': '#ef4444', bed: '#6366f1',
+  bird: '#22c55e', cat: '#22c55e', dog: '#22c55e', horse: '#84cc16',
+  bowl: '#06b6d4', banana: '#eab308', apple: '#ef4444',
+  sandwich: '#f97316', orange: '#f97316', carrot: '#f97316',
+  cake: '#ec4899', donut: '#ec4899', pizza: '#f97316',
+};
+function getClassColor(l) { return CLASS_COLORS[l] || '#22c55e'; }
+
+function matchAndSmooth(raw) {
+  const matched = new Set();
+  for (const nd of raw) {
+    const ncx = (nd.bbox[0] + nd.bbox[2]) / 2, ncy = (nd.bbox[1] + nd.bbox[3]) / 2;
+    let best = null, bestDist = Infinity;
+    for (const sd of smoothedDetections) {
+      if (nd.label !== sd.label || matched.has(sd)) continue;
+      const scx = (sd.bbox[0] + sd.bbox[2]) / 2, scy = (sd.bbox[1] + sd.bbox[3]) / 2;
+      const d = Math.hypot(ncx - scx, ncy - scy);
+      if (d < bestDist && d < 120) { bestDist = d; best = sd; }
+    }
+    if (best) {
+      for (let i = 0; i < 4; i++) best.bbox[i] = best.bbox[i] * (1 - SMOOTH_ALPHA) + nd.bbox[i] * SMOOTH_ALPHA;
+      best.confidence = nd.confidence; matched.add(best);
+    } else {
+      const n = { bbox: [...nd.bbox], confidence: nd.confidence, label: nd.label };
+      smoothedDetections.push(n); matched.add(n);
+    }
+  }
+  smoothedDetections = smoothedDetections.filter(s => matched.has(s));
+}
+
+// ---- Audio cues ----
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(f, d, t = 'sine') {
+  try {
+    const ctx = getAudioCtx(); const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.frequency.value = f; o.type = t;
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + d);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime + d);
+  } catch (e) {}
+}
+function beepStart() { playTone(400, 0.12); }
+function beepCaptured() { playTone(660, 0.06); setTimeout(() => playTone(880, 0.08), 80); }
+function beepError() { playTone(300, 0.25, 'sawtooth'); }
+
+// ---- Tab switching ----
+function switchTab(tab) {
+  activeTab = tab;
+  tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  viewPanes.forEach(p => p.classList.remove('active'));
+  const paneMap = { camera: cameraPane, map: mapPane, history: historyPane };
+  if (paneMap[tab]) paneMap[tab].classList.add('active');
+  
+  if (tab === 'camera') {
+    cameraPip.classList.add('fullscreen');
+  } else {
+    cameraPip.classList.remove('fullscreen');
+    if (!mapInitialized) initMap();
+    else map.invalidateSize();
+  }
+  
+  if (tab === 'history') renderHistory();
+}
+tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+// ---- Camera ----
+let cameraStarted = false;
+
+function renderCameraSheet() {
+  if (!cameraStarted) {
+    cameraSheetContent.innerHTML = `
+      <div class="camera-sheet-placeholder">
+        <div class="icon">📷</div>
+        <p>Camera not started</p>
+        <button id="startCameraBtn">Start Camera</button>
+      </div>`;
+    document.getElementById('startCameraBtn').addEventListener('click', startCamera);
+    pipLabel.textContent = 'Camera off';
+  } else {
+    const count = smoothedDetections.length;
+    const hasPerson = smoothedDetections.some(d => d.label === 'person');
+    cameraSheetContent.innerHTML = `
+      <div class="camera-sheet-stats">
+        <div class="stat"><span class="val">${count}</span><span class="lbl">Objects</span></div>
+        <div class="stat"><span class="val" style="color:${hasPerson ? '#dc2626' : '#16a34a'}">${hasPerson ? 'Yes' : 'No'}</span><span class="lbl">Person</span></div>
+        <div class="stat"><span class="val" id="camFpsVal">--</span><span class="lbl">Latency</span></div>
+      </div>`;
+    pipLabel.textContent = `${count} obj`;
+  }
+}
+
+async function startCamera() {
+  speakText('Starting camera.');
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'environment' },
+      audio: false,
+    });
+    video.srcObject = mediaStream;
+    cameraStarted = true;
+    cameraPip.classList.add('active');
+    await video.play();
+    overlay.width = video.videoWidth || 640;
+    overlay.height = video.videoHeight || 480;
+    renderCameraSheet();
+    startDetectionLoop();
+    setState(STATE.IDLE);
+    if (activeTab === 'camera') renderCameraSheet();
+  } catch (err) {
+    console.error('Camera error:', err);
+    speakText('Camera access denied. Please allow camera permissions.');
+  }
+}
+
+// ---- Detection ----
+async function runDetection() {
+  if (video.readyState < 2) return;
+  const w = video.videoWidth, h = video.videoHeight;
+  if (w === 0 || h === 0) return;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.drawImage(video, 0, 0, w, h);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.7));
+  if (!blob) return;
+  const fd = new FormData(); fd.append('file', blob, 'frame.jpg');
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/api/detect', { method: 'POST', body: fd });
+    const data = await res.json();
+    lastDetections = data.detections || [];
+    matchAndSmooth(lastDetections);
+    drawOverlay(w, h, smoothedDetections, data.person || false);
+    const el = (performance.now() - t0).toFixed(0);
+    detectionCount.textContent = `${smoothedDetections.length}`;
+    personBadge.textContent = 'Person';
+    personBadge.className = `badge ${data.person ? 'badge-red' : 'badge-green'}`;
+    pipLabel.textContent = `${smoothedDetections.length} obj`;
+    const fpsEl = document.getElementById('camFpsVal');
+    if (fpsEl) fpsEl.textContent = `${el}ms`;
+    if (activeTab === 'camera') renderCameraSheet();
+  } catch (err) { console.error('Detection error:', err); }
+}
+
+function drawOverlay(w, h, detections) {
+  overlay.width = w; overlay.height = h;
+  const ctx = overlay.getContext('2d'); ctx.clearRect(0, 0, w, h);
+  for (const d of detections) {
+    const [x1, y1, x2, y2] = d.bbox;
+    const color = getClassColor(d.label);
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1); ctx.shadowBlur = 0;
+    const label = `${d.label}`;
+    ctx.font = 'bold 10px sans-serif';
+    const fm = ctx.measureText(label); const lh = 18;
+    ctx.fillStyle = color; ctx.fillRect(x1, y1 - lh, fm.width + 8, lh);
+    ctx.fillStyle = '#fff'; ctx.fillText(label, x1 + 4, y1 - 5);
+  }
+}
+
+function startDetectionLoop() {
+  if (detectionInterval) clearInterval(detectionInterval);
+  detectionInterval = setInterval(runDetection, 800);
+  setTimeout(runDetection, 100);
+  startNavigation();
+}
+
+// ---- Speech Queue ----
+let speechQueue = [];
+let speechActive = false;
+let currentAudio = null;
+let responseBuffer = '';
+let spokenIndex = 0;
+let streamComplete = false;
+let lastNavTime = 0;
+let lastNavSignature = '';
+
+function speakText(text) {
+  if (!text) return;
+  speechQueue.push(text);
+  processSpeechQueue();
+}
+
+function processSpeechQueue() {
+  if (speechActive || speechQueue.length === 0) return;
+  speechActive = true;
+  const text = speechQueue.shift();
+  setState(STATE.SPEAKING);
+  speakWithElevenLabs(text, onSpeechDone);
+}
+
+function onSpeechDone() {
+  speechActive = false;
+  if (speechQueue.length === 0) setState(STATE.IDLE);
+  processSpeechQueue();
+}
+
+function speakWithBrowser(text, onDone) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.0; u.onend = onDone;
+  u.onerror = () => { speechQueue = []; speechActive = false; setState(STATE.IDLE); };
+  window.speechSynthesis.speak(u);
+}
+
+async function speakWithElevenLabs(text, onDone) {
+  try {
+    const payload = { text };
+    const v = ttsVoice.value;
+    if (v) payload.voice = v;
+    else payload.accent = localStorage.getItem('ally_accent') || 'com';
+    const res = await fetch('/api/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`TTS ${res.status}: ${e}`); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url); currentAudio = audio;
+    audio.onended = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
+    audio.onerror = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
+    await audio.play();
+  } catch (e) { console.error('TTS error:', e); speakWithBrowser(text, onDone); }
+}
+
+async function testElevenLabs() {
+  voiceStatus.textContent = 'Testing...'; voiceStatus.className = '';
+  testVoiceBtn.disabled = true;
+  try {
+    const payload = { text: 'Hello, this is a test.' };
+    const v = ttsVoice.value;
+    if (v) payload.voice = v;
+    else payload.accent = localStorage.getItem('ally_accent') || 'com';
+    const res = await fetch('/api/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Status ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => { URL.revokeObjectURL(url); };
+    await audio.play();
+    voiceStatus.textContent = 'Working!'; voiceStatus.className = 'status-ok';
+  } catch (e) { voiceStatus.textContent = `Failed: ${e.message}`; voiceStatus.className = 'status-err'; }
+  testVoiceBtn.disabled = false;
+}
+
+// ---- State ----
+function setState(newState, statusText) {
+  state = newState;
+  micBtn.className = 'mic-btn';
+  if (state === STATE.IDLE) { micLabel.textContent = statusText || 'Tap'; }
+  else if (state === STATE.LISTENING) { micBtn.classList.add('listening'); micLabel.textContent = statusText || 'Listening...'; }
+  else if (state === STATE.PROCESSING) { micBtn.classList.add('processing'); micLabel.textContent = statusText || 'Thinking...'; }
+  else if (state === STATE.SPEAKING) { micBtn.classList.add('speaking'); micLabel.textContent = statusText || 'Speaking...'; }
+}
+
+// ---- Speech Rec ----
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+
+function handleVoiceCommand(text) {
+  const l = text.toLowerCase();
+  const cmds = {
+    camera: /(?:switch|show|open).*camera/,
+    map: /(?:switch|show|open|where).*map|where am i/,
+    history: /(?:switch|show|open).*(?:history|chat)/,
+  };
+  for (const [tab, pat] of Object.entries(cmds)) {
+    if (pat.test(l)) {
+      if (tab === 'map') { switchTab(tab); speakText('Showing map.'); }
+      else { switchTab(tab); speakText(`Switching to ${tab} view.`); }
+      return true;
+    }
+  }
+  if (l.includes('where am i') && routeActive) {
+    const step = lastStepIndex >= 0 ? routeSteps[Math.min(lastStepIndex, routeSteps.length - 1)] : null;
+    if (step) speakText(`You are at step ${lastStepIndex + 1} of ${routeSteps.length}. ${step.instruction}. Headed to ${destName}.`);
+    else speakText(`You are on a route to ${destName}.`);
+    return true;
+  }
+  if (l.includes('what\'s next') || l.includes('what is next') || l.includes('what next') || l.includes('where to')) {
+    if (routeActive && routeSteps.length) {
+      const nextIdx = Math.min(lastStepIndex + 1, routeSteps.length - 1);
+      if (nextIdx >= 0 && nextIdx < routeSteps.length) {
+        speakText(routeSteps[nextIdx].instruction);
+      } else {
+        speakText(`You're on your way to ${destName}. Keep walking forward.`);
+      }
+    } else {
+      speakText('No active route. Say navigate to a building.');
+    }
+    return true;
+  }
+  if (/(?:list|read|repeat)\s+(?:steps|route|directions)/.test(l)) {
+    listAllSteps();
+    return true;
+  }
+  const navMatch = l.match(/(?:navigate|directions|take me|go)\s+(?:to\s+)?(.+)/i);
+  if (navMatch) {
+    const query = navMatch[1].trim();
+    const aliases = {
+      'dc': 'DC — Davis Centre', 'davis': 'DC — Davis Centre', 'davis centre': 'DC — Davis Centre',
+      'mc': 'MC — Mathematics & Computer', 'math': 'MC — Mathematics & Computer', 'math building': 'MC — Mathematics & Computer', 'mathematics': 'MC — Mathematics & Computer',
+      'slc': 'SLC — Student Life Centre', 'student life': 'SLC — Student Life Centre',
+      'e7': 'E7 — Engineering 7', 'engineering 7': 'E7 — Engineering 7', 'eng 7': 'E7 — Engineering 7',
+      'e5': 'E5 — Engineering 5', 'engineering 5': 'E5 — Engineering 5', 'eng 5': 'E5 — Engineering 5',
+      'e3': 'E3 — Engineering 3', 'engineering 3': 'E3 — Engineering 3', 'eng 3': 'E3 — Engineering 3',
+      'pac': 'PAC — Physical Activities Complex', 'gym': 'PAC — Physical Activities Complex',
+      'stc': 'STC — Science Teaching Complex', 'science': 'STC — Science Teaching Complex',
+      'hh': 'HH — Hagey Hall', 'hagey': 'HH — Hagey Hall',
+      'al': 'AL — Arts Lecture Hall', 'arts': 'AL — Arts Lecture Hall',
+      'dwe': 'DWE — Douglas Wright Engineering', 'douglas': 'DWE — Douglas Wright Engineering',
+      'bmh': 'BMH — B. C. Matthews Hall', 'matthews': 'BMH — B. C. Matthews Hall',
+      'v1': 'V1 — Village 1', 'village': 'V1 — Village 1',
+      'phy': 'PHY — Physics Building', 'physics': 'PHY — Physics Building',
+      'qnc': 'QNC — Quantum Nano Centre', 'quantum': 'QNC — Quantum Nano Centre', 'nano': 'QNC — Quantum Nano Centre',
+      'dp': 'DP — Dana Porter Library', 'dana porter': 'DP — Dana Porter Library', 'library': 'DP — Dana Porter Library',
+      'eit': 'EIT — Engineering Ideas', 'eit building': 'EIT — Engineering Ideas',
+      'tml': 'TML —(unknown)',
+    };
+    const aliasMatch = aliases[query] || aliases[query.replace(/\s+building$/, '')];
+    const building = aliasMatch
+      ? BUILDINGS.find(b => b.n === aliasMatch)
+      : BUILDINGS.find(b =>
+          b.n.toLowerCase().includes(query) ||
+          query.includes(b.n.split(' — ')[0].toLowerCase()) ||
+          query.includes(b.n.split(' — ')[1]?.toLowerCase() || '')
+        );
+    if (building) {
+      switchTab('map');
+      destSelect.value = building.n;
+      destLat = building.lat; destLng = building.lng; destName = building.n;
+      setTimeout(() => {
+        if (userMarker) {
+          const pos = userMarker.getLatLng();
+          fetchRoute(pos.lat, pos.lng, destLat, destLng);
+        } else {
+          speakText('Waiting for your location.');
+        }
+      }, 500);
+      return true;
+    }
+    speakText(`I don't know that building. Try Davis Centre, MC, SLC, E7, E5, or another campus building.`);
+    return true;
+  }
+  if (/(?:clear|cancel|stop)\s+(?:route|directions|nav|navigation)/.test(l)) {
+    clearRoute();
+    destSelect.value = '';
+    speakText('Route cleared.');
+    return true;
+  }
+  return false;
+}
+
+function startListening() {
+  if (!SpeechRecognitionAPI) { setState(STATE.IDLE, 'Not supported'); beepError(); return; }
+  if (!mediaStream) { setState(STATE.IDLE, 'Start camera first'); beepError(); return; }
+  if (isStreaming) return;
+  stopSpeaking(); setState(STATE.LISTENING); beepStart();
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = 'en-US'; recognition.interimResults = false; recognition.continuous = false; recognition.maxAlternatives = 1;
+  recognition.onresult = (e) => {
+    const t = e.results[0][0].transcript.trim();
+    if (t) { beepCaptured(); if (handleVoiceCommand(t)) return; setState(STATE.PROCESSING); askQuestion(t); }
+    else setState(STATE.IDLE, 'No speech');
+  };
+  recognition.onerror = (e) => {
+    console.warn('Speech:', e.error);
+    if (e.error === 'no-speech') setState(STATE.IDLE, 'No speech heard');
+    else if (e.error === 'aborted') { if (state === STATE.LISTENING) setState(STATE.IDLE); }
+    else { beepError(); setState(STATE.IDLE, 'Speech error'); }
+  };
+  recognition.onend = () => { if (state === STATE.LISTENING) setState(STATE.IDLE, 'No speech heard'); };
+  try { recognition.start(); } catch (e) { setState(STATE.IDLE, 'Speech error'); beepError(); }
+}
+
+function stopListening() {
+  if (recognition) { try { recognition.abort(); } catch (e) {} recognition = null; }
+  if (state === STATE.LISTENING) setState(STATE.IDLE);
+}
+
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  window.speechSynthesis.cancel();
+  speechQueue = []; speechActive = false;
+  responseBuffer = ''; spokenIndex = 0; streamComplete = false;
+  lastNavSignature = '';
+  if (abortController) { abortController.abort(); abortController = null; }
+  isStreaming = false;
+}
+
+// ---- Nav ----
+async function captureFrame() {
+  const w = video.videoWidth, h = video.videoHeight;
+  if (w === 0 || h === 0) return null;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95));
+}
+
+function navSignature(d) {
+  if (!d || !d.length) return 'empty';
+  return d.map(x => `${x.label[0]}${Math.round(x.bbox[0]/120)}`).sort().join('');
+}
+
+function generateNavGuidance(detections, frameW) {
+  if (!detections || !detections.length) return null;
+  const left = [], center = [], right = [];
+  for (const d of detections) {
+    const cx = (d.bbox[0] + d.bbox[2]) / 2, ratio = cx / frameW, area = (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1]);
+    const o = { label: d.label, area };
+    if (ratio < 0.33) left.push(o); else if (ratio > 0.66) right.push(o); else center.push(o);
+  }
+  for (const a of [left, center, right]) a.sort((a, b) => b.area - a.area);
+  const scene = [];
+  if (center.length) { const n = [...new Set(center.map(o => o.label))]; scene.push(n.length === 1 ? `${n[0]} ahead` : `${n.slice(0,-1).join(', ')} and ${n.slice(-1)} ahead`); }
+  if (left.length) { const n = [...new Set(left.map(o => o.label))]; scene.push(n.length === 1 ? `${n[0]} on your left` : `${n.slice(0,-1).join(', ')} and ${n.slice(-1)} on your left`); }
+  if (right.length) { const n = [...new Set(right.map(o => o.label))]; scene.push(n.length === 1 ? `${n[0]} on your right` : `${n.slice(0,-1).join(', ')} and ${n.slice(-1)} on your right`); }
+  const desc = scene.join('. ') + '.';
+  if (center.length) {
+    if (!left.length && !right.length) return `${desc} Stop.`;
+    if (!left.length) return `${desc} Move left.`;
+    if (!right.length) return `${desc} Move right.`;
+    return `${desc} Move ${left[0].area > right[0].area ? 'right' : 'left'}.`;
+  }
+  if (left.length && right.length) return `${desc} Move straight ahead carefully.`;
+  if (left.length) return `${desc} Move right.`;
+  if (right.length) return `${desc} Move left.`;
+  return null;
+}
+
+function runNavigation() {
+  if (speechQueue.length > 0) return;
+  const now = Date.now();
+  if (now - lastNavTime < 8000) return;
+  const w = video.videoWidth; if (w === 0) return;
+  const sig = navSignature(smoothedDetections);
+  if (sig === lastNavSignature) {
+    if (now - lastNavTime > 30000 && sig === 'empty') { lastNavTime = now; speakText('Waiting for objects.'); }
+    return;
+  }
+  lastNavSignature = sig;
+  const g = generateNavGuidance(smoothedDetections, w);
+  if (g) { speakText(g); lastNavTime = now; }
+  else if (!smoothedDetections.length) { speakText('Path clear.'); lastNavTime = now; }
+}
+
+function startNavigation() {
+  runNavigation();
+  let lastTick = performance.now();
+  function loop(now) { if (now - lastTick >= 4000) { lastTick = now; runNavigation(); } requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+}
+
+// ---- Chat History ----
+let chatHistory = [];
+function loadHistory() { try { chatHistory = JSON.parse(localStorage.getItem('ally_history') || '[]'); } catch (e) { chatHistory = []; } }
+function saveHistory() { try { localStorage.setItem('ally_history', JSON.stringify(chatHistory)); } catch (e) {} }
+function addHistory(q, a) { chatHistory.push({ q, a, t: Date.now() }); saveHistory(); renderHistory(); }
+function renderHistory() {
+  if (!historyList) return;
+  if (!chatHistory.length) {
+    historyList.innerHTML = '<div class="history-empty">No conversations yet.<br>Tap the mic to ask a question.</div>';
+    historyCount.textContent = '0 conversations'; return;
+  }
+  let html = '';
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    const e = chatHistory[i];
+    const d = new Date(e.t); const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    html += `<div class="history-entry"><div class="time">${ts}</div><div class="q">${esc(e.q)}</div><div class="a">${esc(e.a)}</div></div>`;
+  }
+  historyList.innerHTML = html;
+  historyCount.textContent = `${chatHistory.length} conversation${chatHistory.length !== 1 ? 's' : ''}`;
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+clearHistoryBtn.addEventListener('click', () => { chatHistory = []; saveHistory(); renderHistory(); speakText('History cleared.'); });
+loadHistory(); renderHistory();
+
+// ---- Map ----
+let map = null;
+let mapInitialized = false;
+let userMarker = null;
+let watchId = null;
+
+const BUILDINGS = [
+  { n: 'DC — Davis Centre', lat: 43.47285, lng: -80.54404 },
+  { n: 'MC — Mathematics & Computer', lat: 43.47240, lng: -80.54641 },
+  { n: 'SLC — Student Life Centre', lat: 43.47383, lng: -80.54576 },
+  { n: 'E7 — Engineering 7', lat: 43.47068, lng: -80.53966 },
+  { n: 'E5 — Engineering 5', lat: 43.4699, lng: -80.5406 },
+  { n: 'E3 — Engineering 3', lat: 43.4699, lng: -80.5421 },
+  { n: 'PAC — Physical Activities Complex', lat: 43.47467, lng: -80.54735 },
+  { n: 'STC — Science Teaching Complex', lat: 43.4714, lng: -80.5427 },
+  { n: 'HH — Hagey Hall', lat: 43.4733, lng: -80.5494 },
+  { n: 'AL — Arts Lecture Hall', lat: 43.4685, lng: -80.5489 },
+  { n: 'DWE — Douglas Wright Engineering', lat: 43.4694, lng: -80.5395 },
+  { n: 'BMH — B. C. Matthews Hall', lat: 43.4704, lng: -80.5478 },
+  { n: 'V1 — Village 1', lat: 43.4720, lng: -80.5464 },
+  { n: 'PHY — Physics Building', lat: 43.47077, lng: -80.54503 },
+  { n: 'QNC — Quantum Nano Centre', lat: 43.47101, lng: -80.54118 },
+  { n: 'DP — Dana Porter Library', lat: 43.46990, lng: -80.54240 },
+  { n: 'EIT — Engineering Ideas', lat: 43.47175, lng: -80.54107 },
+  { n: 'TML —(unknown)', lat: 43.47318, lng: -80.54769 },
+];
+
+function initMap() {
+  if (mapInitialized) { map.invalidateSize(); return; }
+  mapInitialized = true;
+  map = L.map('map', { zoomControl: false }).setView([43.4687, -80.5449], 17);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  for (const b of BUILDINGS) {
+    const m = L.circleMarker([b.lat, b.lng], {
+      radius: 8, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.25, weight: 2,
+    }).addTo(map);
+    m.bindTooltip(b.n, { direction: 'top' });
+    m.on('click', () => speakText(b.n));
+  }
+  if ('geolocation' in navigator) {
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => onLocationUpdate(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+      (err) => handleGeoError(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+  } else {
+    nearestBldg.textContent = 'Geolocation not supported';
+    tryIPGeolocation();
+  }
+  setTimeout(() => map.invalidateSize(), 300);
+  populateDestSelect();
+}
+
+// ---- Location helpers ----
+function onLocationUpdate(lat, lng, accuracy) {
+  if (userMarker) userMarker.setLatLng([lat, lng]);
+  else {
+    userMarker = L.circleMarker([lat, lng], { radius: 7, color: '#0f172a', fillColor: '#0f172a', fillOpacity: 0.7, weight: 3 }).addTo(map);
+    userMarker.bindTooltip('You', { direction: 'top' });
+  }
+  map.setView([lat, lng]);
+  gpsInfo.textContent = accuracy ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : `${lat.toFixed(4)}, ${lng.toFixed(4)} (approx)`;
+  let nearest = null, minDist = Infinity;
+  for (const b of BUILDINGS) {
+    const d = map.distance([lat, lng], [b.lat, b.lng]);
+    if (d < minDist) { minDist = d; nearest = b; }
+  }
+  if (nearest) {
+    nearestBldg.textContent = nearest.n;
+    nearestDist.textContent = minDist < 100 ? 'You are nearby' : `${Math.round(minDist)}m away`;
+  } else { nearestBldg.textContent = 'Waterloo Campus'; nearestDist.textContent = ''; }
+  checkRouteProgress(lat, lng);
+}
+
+function handleGeoError(err) {
+  const msgs = {
+    1: 'Location denied — allow access in browser settings',
+    2: 'Location unavailable — weak GPS signal',
+    3: 'Location timed out',
+  };
+  const msg = msgs[err.code] || 'Location error';
+  nearestBldg.textContent = msg;
+  gpsInfo.textContent = '--';
+  console.warn('Geo error:', err.code, err.message);
+  if (err.code !== 1) tryIPGeolocation();
+}
+
+async function tryIPGeolocation() {
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.latitude && data.longitude) {
+      onLocationUpdate(data.latitude, data.longitude, null);
+      nearestDist.textContent = nearestDist.textContent + ' (IP-based)';
+    }
+  } catch (e) {
+    // IP geolocation failed too — do nothing
+  }
+}
+
+// ---- Routing — scene-based VLM guidance (no distances) ----
+const OSRM_URL = 'https://router.project-osrm.org/route/v1/foot';
+let destLat = null, destLng = null, destName = null;
+let routeLine = null, destMarker = null;
+let waypointMarkers = [];
+let routeSteps = [];
+let lastStepIndex = -1;
+let routeCoords = [];
+let offRouteWarned = false;
+let routeActive = false;
+let guiding = false;
+
+const destSelect = document.getElementById('destSelect');
+const getDirBtn = document.getElementById('getDirBtn');
+const clearRouteBtn = document.getElementById('clearRouteBtn');
+const dirInfo = document.getElementById('dirInfo');
+
+function populateDestSelect() {
+  destSelect.innerHTML = '<option value="">Destination...</option>';
+  for (const b of BUILDINGS) {
+    const el = document.createElement('option');
+    el.value = b.n;
+    el.textContent = b.n;
+    destSelect.appendChild(el);
+  }
+}
+
+function getBuildingCoords(name) {
+  return BUILDINGS.find(b => b.n === name) || null;
+}
+
+function maneuverDirection(mmod) {
+  const dirs = { north: 'forward', northeast: 'forward to the right', east: 'to the right',
+                 southeast: 'back to the right', south: 'backward', southwest: 'back to the left',
+                 west: 'to the left', northwest: 'forward to the left' };
+  return dirs[mmod] || mmod;
+}
+
+function maneuverTurn(mmod) {
+  const turns = { left: 'turn left', right: 'turn right', 'slight left': 'bear slightly left',
+                  'slight right': 'bear slightly right', 'sharp left': 'turn sharply left',
+                  'sharp right': 'turn sharply right', uturn: 'turn around' };
+  return turns[mmod] || 'continue straight';
+}
+
+function buildInstruction(step) {
+  const m = step.maneuver;
+  const mtype = m.type || '';
+  const mmod = m.modifier || '';
+  const name = (step.name || '').trim();
+  const loc = name ? ` onto ${name}` : '';
+  if (mtype === 'depart') return `walk ${maneuverDirection(mmod)}${loc}`;
+  if (mtype === 'turn') return `${maneuverTurn(mmod)}${loc}`;
+  if (mtype === 'arrive') return 'arrived';
+  if (mtype === 'continue' || mtype === 'new name') return `walk straight${loc}`;
+  return `continue${loc}`;
+}
+
+async function askVLM(question) {
+  const blob = await captureFrame();
+  if (!blob) return null;
+  const fd = new FormData();
+  fd.append('file', blob, 'q.jpg');
+  fd.append('question', question);
+  try {
+    const res = await fetch('/api/ask', { method: 'POST', body: fd });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', answer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { const d = JSON.parse(line.slice(6)); if (d.token) answer += d.token; } catch (e) {}
+        }
+      }
+    }
+    return answer.trim();
+  } catch (e) {
+    console.error('VLM error:', e);
+    return null;
+  }
+}
+
+async function getVLMSceneGuidance(context) {
+  if (!mediaStream || !cameraStarted) return null;
+  const q = `Look at this camera image from a person's perspective walking on a university campus. ${context} Describe what you see in the path ahead and give them one short, natural instruction for exactly where to walk next. Mention specific things you can see like doors, pathways, ramps, buildings, curbs, or obstacles. Keep it to 1-2 sentences. Example: "There is a door right in front of you, push it open and walk through." or "The path continues straight ahead between the buildings." or "There is an opening on your left, turn there and walk forward." Do not use distances.`;
+  speakText('Let me check what is ahead.');
+  return await askVLM(q);
+}
+
+async function guideFirstStep() {
+  if (!routeSteps.length) return;
+  guiding = true;
+  const guidance = await getVLMSceneGuidance('They are about to start walking toward ' + destName + '.');
+  if (guidance) {
+    speakText(`Great! ${guidance}`);
+  } else {
+    speakText(`Walk forward to head toward ${destName}.`);
+  }
+  guiding = false;
+}
+
+async function guideNextStep(index) {
+  if (index >= routeSteps.length) return;
+  const s = routeSteps[index];
+  lastStepIndex = index;
+  const remaining = routeSteps.slice(index + 1);
+  if (remaining.length === 0) {
+    playTone(880, 0.15);
+    setTimeout(() => playTone(1100, 0.2), 200);
+    speakText(`You have arrived at ${destName}. Well done!`);
+    clearRoute();
+    return;
+  }
+  guiding = true;
+  const action = `${s.instruction}`;
+  const guidance = await getVLMSceneGuidance(`They need to ${action} at this point.`);
+  if (guidance) {
+    speakText(guidance);
+  } else {
+    speakText(`Now, ${action}.`);
+  }
+  guiding = false;
+  const remDist = remaining.reduce((sum, st) => sum + st.distance, 0);
+  const remText = remDist < 1000 ? `${remDist}m` : `${(remDist / 1000).toFixed(1)}km`;
+  dirInfo.innerHTML = `
+    <div class="dir-summary">→ ${destName} · ${remText} left</div>
+    <div class="dir-step">${s.instruction}</div>
+  `;
+}
+
+async function fetchRoute(fromLat, fromLng, toLat, toLng) {
+  const coords = `${fromLng},${fromLat};${toLng},${toLat}`;
+  try {
+    getDirBtn.textContent = 'Loading...';
+    getDirBtn.disabled = true;
+    const res = await fetch(`${OSRM_URL}/${coords}?steps=true&geometries=geojson&overview=full`);
+    if (!res.ok) { speakText('Route server error'); return; }
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes || !data.routes.length) {
+      speakText('No route found');
+      return;
+    }
+    const route = data.routes[0];
+    const steps = [];
+    for (const leg of route.legs) {
+      for (const step of leg.steps) {
+        if (step.maneuver.type === 'arrive') continue;
+        if (step.distance < 5) continue;
+        const loc = step.maneuver.location;
+        steps.push({
+          instruction: buildInstruction(step),
+          distance: Math.round(step.distance),
+          lat: loc[1],
+          lon: loc[0],
+          modifier: step.maneuver.modifier || 'depart',
+        });
+      }
+    }
+    displayRoute(route.geometry, steps, Math.round(route.distance));
+  } catch (err) {
+    console.error('Route error:', err);
+    speakText('Failed to get directions. Check your internet connection.');
+  } finally {
+    getDirBtn.textContent = 'Go';
+    getDirBtn.disabled = false;
+  }
+}
+
+function displayRoute(geojson, steps, totalDist) {
+  const name = destName, lat = destLat, lng = destLng;
+  clearRoute();
+  destName = name; destLat = lat; destLng = lng;
+  routeSteps = steps;
+  lastStepIndex = -1;
+  routeActive = true;
+  offRouteWarned = false;
+  guiding = false;
+
+  const coords = geojson.coordinates;
+  routeCoords = coords.map(c => [c[1], c[0]]);
+
+  routeLine = L.geoJSON(geojson, {
+    style: { color: '#f59e0b', weight: 4, opacity: 0.8, dashArray: null }
+  }).addTo(map);
+
+  const endCoord = coords[coords.length - 1];
+  destMarker = L.circleMarker([endCoord[1], endCoord[0]], {
+    radius: 10, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.6, weight: 3
+  }).addTo(map);
+  destMarker.bindTooltip(`${destName} (destination)`, { direction: 'top' });
+
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const m = L.circleMarker([s.lat, s.lon], {
+      radius: 4, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.4, weight: 1
+    }).addTo(map);
+    m.bindTooltip(s.instruction, { direction: 'top' });
+    waypointMarkers.push(m);
+  }
+
+  const startLat = userMarker ? userMarker.getLatLng().lat : routeCoords[0][0];
+  const startLng = userMarker ? userMarker.getLatLng().lng : routeCoords[0][1];
+  const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${startLat},${startLng}&destination=${destLat},${destLng}&travelmode=walking`;
+
+  dirInfo.innerHTML = `
+    <div class="dir-summary">→ ${destName}</div>
+    <div class="dir-step">Let's go!</div>
+    <div class="dir-distance"><a href="${gmapsUrl}" target="_blank" rel="noopener">Open in Google Maps ↗</a></div>
+  `;
+  dirInfo.classList.add('active');
+  map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+
+  speakText(`Let's head to ${destName}. I'll guide you using the camera, step by step.`);
+  setTimeout(() => guideFirstStep(), 2500);
+}
+
+function clearRoute() {
+  if (routeLine) { if (map) map.removeLayer(routeLine); routeLine = null; }
+  if (destMarker) { if (map) map.removeLayer(destMarker); destMarker = null; }
+  for (const m of waypointMarkers) { if (map) map.removeLayer(m); }
+  waypointMarkers = [];
+  routeSteps = [];
+  routeCoords = [];
+  lastStepIndex = -1;
+  routeActive = false;
+  offRouteWarned = false;
+  guiding = false;
+  destLat = null; destLng = null; destName = null;
+  dirInfo.classList.remove('active');
+  dirInfo.innerHTML = '';
+}
+
+function distToRoute(lat, lng) {
+  if (!routeCoords.length) return Infinity;
+  let minD = Infinity;
+  for (let i = 0; i < routeCoords.length - 1; i++) {
+    const [ax, ay] = routeCoords[i];
+    const [bx, by] = routeCoords[i + 1];
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq ? ((lat - ax) * dx + (lng - ay) * dy) / lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const px = ax + t * dx, py = ay + t * dy;
+    const d = map.distance([lat, lng], [px, py]);
+    if (d < minD) minD = d;
+  }
+  return minD;
+}
+
+async function checkRouteProgress(lat, lng) {
+  if (!routeActive || !routeSteps.length || !destMarker || guiding) return;
+
+  const destDist = map.distance([lat, lng], [destMarker.getLatLng().lat, destMarker.getLatLng().lng]);
+  if (destDist < 15) {
+    playTone(880, 0.15);
+    setTimeout(() => playTone(1100, 0.2), 200);
+    speakText(`You have arrived at ${destName}. Well done!`);
+    clearRoute();
+    return;
+  }
+
+  const offDist = distToRoute(lat, lng);
+  if (offDist > 30 && !offRouteWarned) {
+    offRouteWarned = true;
+    speakText('You seem off the path. Tap Go to get new directions.');
+    return;
+  }
+  if (offDist < 15) offRouteWarned = false;
+
+  let minDist = Infinity, closestIdx = -1;
+  for (let i = 0; i < routeSteps.length; i++) {
+    const d = map.distance([lat, lng], [routeSteps[i].lat, routeSteps[i].lon]);
+    if (d < minDist) { minDist = d; closestIdx = i; }
+  }
+
+  if (closestIdx > lastStepIndex && closestIdx < routeSteps.length) {
+    if (closestIdx > 0) {
+      if (minDist < 30 || (lastStepIndex >= 0 && closestIdx === lastStepIndex + 1)) {
+        await guideNextStep(closestIdx);
+      }
+    } else {
+      lastStepIndex = 0;
+    }
+  }
+}
+
+function listAllSteps() {
+  if (!routeSteps.length) { speakText('No active route.'); return; }
+  speakText(`I'll tell you each step when you get there. Say "what's next" for a hint.`);
+}
+
+getDirBtn.addEventListener('click', () => {
+  if (!destSelect.value) { speakText('Pick a destination from the list.'); return; }
+  const b = getBuildingCoords(destSelect.value);
+  if (!b) return;
+  destLat = b.lat; destLng = b.lng; destName = b.n;
+  if (!userMarker) { speakText('Waiting for your location.'); return; }
+  const pos = userMarker.getLatLng();
+  fetchRoute(pos.lat, pos.lng, destLat, destLng);
+});
+
+clearRouteBtn.addEventListener('click', () => {
+  clearRoute();
+  destSelect.value = '';
+  speakText('Route cleared.');
+});
+
+// ---- Token / Stream ----
+function processToken(token) {
+  responseBuffer += token;
+  const unspoken = responseBuffer.slice(spokenIndex);
+  if (!unspoken.length) return;
+  let br = -1;
+  for (let i = 0; i < unspoken.length; i++) {
+    if ('.!?'.includes(unspoken[i]) && (i === unspoken.length - 1 || unspoken[i + 1] === ' ')) br = i + 1;
+  }
+  if (br > 0) { speakText(unspoken.slice(0, br)); spokenIndex += br; }
+}
+
+function finishStream() {
+  streamComplete = true;
+  const r = responseBuffer.slice(spokenIndex);
+  if (r.trim()) speakText(r);
+  else if (speechQueue.length === 0) setState(STATE.IDLE);
+}
+
+// ---- Ask ----
+async function askQuestion(question) {
+  if (isStreaming) return;
+  responseBuffer = ''; spokenIndex = 0; streamComplete = false;
+  transcriptText.innerHTML = `<span class="q">${esc(question)}</span><span class="sep">→</span>Thinking...`;
+  const blob = await captureFrame();
+  if (!blob) { setState(STATE.IDLE, 'Camera error'); beepError(); return; }
+  const fd = new FormData(); fd.append('file', blob, 'q.jpg'); fd.append('question', question);
+  isStreaming = true; abortController = new AbortController();
+  modelBadge.className = 'badge badge-yellow'; modelBadge.textContent = 'Thinking';
+  try {
+    const res = await fetch('/api/ask', { method: 'POST', body: fd, signal: abortController.signal });
+    const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const d = JSON.parse(line.slice(6));
+            if (d.done) {
+              const m = d.model || '';
+              modelBadge.textContent = m.includes('ollama') ? 'Open Source' : 'Google Vision';
+              modelBadge.className = `badge ${m.includes('ollama') ? 'badge-blue' : 'badge-green'}`;
+              addHistory(question, responseBuffer || '(empty)');
+              transcriptText.innerHTML = `<span class="q">${esc(question)}</span><span class="sep">→</span>${esc(responseBuffer)}`;
+            } else if (d.token) processToken(d.token);
+          } catch (e) { console.warn('SSE:', e); }
+        }
+      }
+    }
+    finishStream();
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    console.error('Ask:', err); beepError(); setState(STATE.IDLE, 'Error');
+    modelBadge.textContent = 'Error'; modelBadge.className = 'badge badge-red';
+  }
+  isStreaming = false; abortController = null;
+}
+
+// ---- Settings ----
+settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); settingsPanel.classList.toggle('open'); });
+document.addEventListener('click', () => settingsPanel.classList.remove('open'));
+settingsPanel.addEventListener('click', (e) => e.stopPropagation());
+testVoiceBtn.addEventListener('click', testElevenLabs);
+
+// ---- Mic ----
+micBtn.addEventListener('click', () => {
+  switch (state) {
+    case STATE.IDLE: startListening(); break;
+    case STATE.LISTENING: stopListening(); setState(STATE.IDLE); break;
+    case STATE.PROCESSING: break;
+    case STATE.SPEAKING: stopSpeaking(); startListening(); break;
+  }
+});
+micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+
+// ---- Prime ----
+document.addEventListener('click', () => {
+  try {
+    if (window.speechSynthesis) { const p = new SpeechSynthesisUtterance(' '); speechSynthesis.speak(p); speechSynthesis.cancel(); }
+    const ctx = getAudioCtx(); if (ctx.state === 'suspended') ctx.resume();
+  } catch (e) {}
+}, { once: true });
+
+// ---- Init ----
+setState(STATE.IDLE);
+switchTab('camera');
+setTimeout(() => initMap(), 500);
+renderCameraSheet();
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) micBtn.click();
+});
+</script>
+</body>
+</html>

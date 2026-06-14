@@ -3,248 +3,239 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ally — Campus Navigation Guide</title>
+<title>Ally — Campus Navigation</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-  background: #07070a; color: #e0e0e0; height: 100vh; overflow: hidden;
+  background: #f8fafc; color: #0f172a; height: 100vh; overflow: hidden;
   user-select: none; -webkit-user-select: none;
 }
 .app {
-  display: flex; flex-direction: column; height: 100vh; max-width: 1400px; margin: 0 auto;
+  width: 100%; height: 100vh; position: relative; overflow: hidden;
 }
 
-/* ---- HEADER ---- */
-header {
+/* ---- FLOATING HEADER ---- */
+.floating-header {
+  position: absolute; top: 12px; left: 12px; right: 12px; z-index: 1000;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; background: linear-gradient(135deg, #12121e 0%, #1a1a2e 100%);
-  border-bottom: 1px solid rgba(108,140,255,0.15); flex-shrink: 0; position: relative; z-index: 10;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px; padding: 10px 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
 }
-header h1 {
-  font-size: 18px; font-weight: 700; letter-spacing: -0.3px;
-  background: linear-gradient(135deg, #fff 0%, #a0b4ff 100%); -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent; background-clip: text;
+.floating-header h1 {
+  font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;
 }
-.status-bar { display: flex; gap: 6px; align-items: center; }
+.floating-header h1 span { color: #f59e0b; }
+.header-badges { display: flex; align-items: center; gap: 6px; }
 .badge {
-  padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600;
-  letter-spacing: 0.3px; display: flex; align-items: center; gap: 4px;
+  padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; gap: 5px; border: 1px solid #e2e8f0;
 }
-.badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-.badge-green { background: rgba(74,222,128,0.12); color: #4ade80; }
-.badge-green::before { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
-.badge-red { background: rgba(248,113,113,0.12); color: #f87171; }
-.badge-red::before { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
-.badge-yellow { background: rgba(251,191,36,0.12); color: #fbbf24; }
-.badge-yellow::before { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.5); }
-.badge-blue { background: rgba(96,165,250,0.12); color: #60a5fa; }
-.badge-blue::before { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.5); }
-.detection-badge { color: #555; font-size: 11px; font-weight: 500; min-width: 28px; text-align: center; }
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.badge-green { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.badge-green::before { background: #22c55e; }
+.badge-red { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.badge-red::before { background: #ef4444; }
+.badge-yellow { background: #fffbeb; color: #d97706; border-color: #fde68a; }
+.badge-yellow::before { background: #f59e0b; }
+.badge-blue { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.badge-blue::before { background: #3b82f6; }
+.detection-badge {
+  font-size: 12px; font-weight: 600; color: #64748b; min-width: 28px; text-align: center;
+}
 .settings-btn {
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
-  color: #666; border-radius: 8px; padding: 5px 9px; font-size: 15px;
-  cursor: pointer; line-height: 1; transition: all 0.2s;
+  background: none; border: 1px solid #e2e8f0; color: #94a3b8; border-radius: 10px;
+  padding: 5px 9px; font-size: 15px; cursor: pointer; line-height: 1;
+  transition: all 0.15s;
 }
-.settings-btn:hover { color: #fff; border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); }
+.settings-btn:hover { color: #0f172a; border-color: #cbd5e1; }
 
 /* ---- SETTINGS PANEL ---- */
 .settings-panel {
-  display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
-  background: rgba(26,26,40,0.96); border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px; padding: 18px; width: 330px;
-  box-shadow: 0 16px 64px rgba(0,0,0,0.6); backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  display: none; position: absolute; top: calc(100% + 8px); right: 0; z-index: 1100;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+  padding: 20px; width: 320px; box-shadow: 0 16px 48px rgba(0,0,0,0.12);
 }
 .settings-panel.open { display: block; }
-.settings-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: #fff; }
-.settings-panel label { display: block; font-size: 11px; font-weight: 500; color: #888; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+.settings-panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #0f172a; }
+.settings-panel label {
+  display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
 .settings-panel input, .settings-panel select {
-  width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.3); color: #e0e0e0; font-size: 13px; margin-bottom: 12px;
-  outline: none; transition: border-color 0.2s;
+  width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0;
+  background: #f8fafc; color: #0f172a; font-size: 13px; margin-bottom: 14px; outline: none;
 }
-.settings-panel input:focus, .settings-panel select:focus { border-color: rgba(108,140,255,0.5); }
-.settings-panel .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
-.settings-panel .stat { font-size: 11px; color: #555; }
+.settings-panel input:focus, .settings-panel select:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+.settings-panel .row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.settings-panel .stat { font-size: 11px; color: #94a3b8; }
 .settings-panel .btn {
-  padding: 7px 18px; border-radius: 8px; border: none; font-size: 12px; font-weight: 500;
-  cursor: pointer; transition: all 0.2s;
+  padding: 8px 20px; border-radius: 10px; border: none; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
 }
-.settings-panel .btn-primary { background: #6c8cff; color: #fff; }
-.settings-panel .btn-primary:hover { background: #5a7aee; }
+.settings-panel .btn-primary { background: #f59e0b; color: #fff; }
+.settings-panel .btn-primary:hover { background: #d97706; }
 .settings-panel .btn-primary:disabled { opacity: 0.4; cursor: default; }
-.settings-panel .btn-sm { padding: 5px 12px; font-size: 11px; }
-.settings-panel .status-ok { color: #4ade80; font-size: 11px; }
-.settings-panel .status-err { color: #f87171; font-size: 11px; }
-.settings-panel .hint { font-size: 11px; color: #555; }
+.settings-panel .btn-sm { padding: 5px 14px; font-size: 11px; }
+.settings-panel .status-ok { color: #16a34a; font-size: 11px; }
+.settings-panel .status-err { color: #dc2626; font-size: 11px; }
 
-/* ---- MAIN ---- */
-.main { flex: 1; overflow: hidden; position: relative; }
+/* ---- MAP (full background) ---- */
+#map {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+}
 
-/* ---- VIEWS ---- */
-.view {
-  display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+/* ---- CAMERA PIP ---- */
+.camera-pip {
+  position: absolute; top: 76px; right: 12px; z-index: 900;
+  width: 140px; height: 105px; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.8);
+  background: #000; display: none;
 }
-.view.active { display: flex; flex-direction: column; }
+.camera-pip.active { display: block; }
+.camera-pip video { width: 100%; height: 100%; object-fit: cover; }
+.camera-pip canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.camera-pip .pip-label {
+  position: absolute; bottom: 4px; left: 6px; font-size: 9px; font-weight: 600;
+  color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.6); pointer-events: none;
+}
 
-/* ---- CAMERA VIEW ---- */
-.camera-view { display: none; }
-.camera-view.active { display: flex; flex-direction: column; }
-.camera-section { flex: 1; display: flex; flex-direction: column; padding: 8px 12px 4px; min-height: 0; }
-.video-container {
-  position: relative; flex: 1; background: #000; border-radius: 12px; overflow: hidden;
-  min-height: 160px; box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.4);
+/* ---- BOTTOM SHEET ---- */
+.bottom-sheet {
+  position: absolute; bottom: 12px; left: 12px; right: 12px; z-index: 1000;
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.8);
+  padding: 14px 16px 12px; max-height: 45vh; display: flex; flex-direction: column;
 }
-.video-container video { width: 100%; height: 100%; object-fit: contain; display: block; }
-.video-container canvas {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+
+/* ---- VIEW CONTENT (switches per tab) ---- */
+.view-content { flex: 1; overflow-y: auto; min-height: 0; }
+.view-content::-webkit-scrollbar { width: 3px; }
+.view-content::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+.view-pane { display: none; padding: 2px 0; }
+.view-pane.active { display: block; }
+
+/* Camera pane */
+.camera-sheet-placeholder {
+  background: #f8fafc; border-radius: 14px; padding: 20px; text-align: center;
 }
-.placeholder {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  text-align: center; width: 100%; padding: 0 24px;
+.camera-sheet-placeholder .icon { font-size: 32px; margin-bottom: 8px; }
+.camera-sheet-placeholder p { color: #64748b; font-size: 13px; margin-bottom: 14px; }
+.camera-sheet-placeholder button {
+  padding: 10px 28px; background: #f59e0b; color: #fff; border: none;
+  border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.3);
 }
-.placeholder-icon { font-size: 56px; margin-bottom: 14px; opacity: 0.5; }
-.placeholder-text { color: #555; font-size: 14px; font-weight: 500; margin-bottom: 4px; }
-.placeholder-sub { color: #444; font-size: 12px; margin-bottom: 20px; }
-.placeholder button {
-  padding: 16px 44px; background: linear-gradient(135deg, #6c8cff 0%, #5a7aee 100%);
-  color: #fff; border: none; border-radius: 14px; font-size: 18px; font-weight: 600;
-  cursor: pointer; min-width: 200px; touch-action: manipulation;
-  box-shadow: 0 4px 20px rgba(108,140,255,0.3); transition: all 0.2s;
+.camera-sheet-stats { display: flex; gap: 16px; justify-content: center; padding: 4px 0; }
+.camera-sheet-stats .stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
-.placeholder button:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(108,140,255,0.4); }
-.placeholder button:active { transform: scale(0.97); }
-.camera-footer {
+.camera-sheet-stats .stat .val { font-size: 18px; font-weight: 700; color: #0f172a; }
+.camera-sheet-stats .stat .lbl { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; }
+
+/* Map pane */
+.map-pane-info { 
+  background: #f8fafc; border-radius: 14px; padding: 10px 14px; margin-bottom: 8px;
   display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 8px;
-  margin-top: 5px; font-size: 11px; flex-shrink: 0;
 }
-.camera-footer .stat-group { display: flex; gap: 12px; }
-.camera-footer .stat-item { display: flex; align-items: center; gap: 4px; color: #555; }
-.camera-footer .stat-item .dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-.camera-footer .stat-item .dot.on { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.4); }
-.camera-footer .stat-item .dot.off { background: #444; }
+.map-pane-info .bldg { font-weight: 600; font-size: 13px; color: #0f172a; }
+.map-pane-info .detail { font-size: 11px; color: #64748b; }
+.map-pane-info .gps { font-size: 10px; color: #94a3b8; }
 
-/* ---- MAP VIEW ---- */
-.map-view { display: none; }
-.map-view.active { display: flex; flex-direction: column; }
-.map-container { flex: 1; position: relative; background: #111; }
-#map { width: 100%; height: 100%; }
-.map-overlay {
-  position: absolute; top: 12px; left: 12px; z-index: 1000;
-  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
-  border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #ccc;
-  pointer-events: none; max-width: 70%;
-}
-.map-overlay .name { color: #fff; font-weight: 600; }
-.map-footer {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 8px;
-  margin: 0 12px 4px; font-size: 11px; color: #555; flex-shrink: 0;
-}
-
-/* ---- HISTORY VIEW ---- */
-.history-view { display: none; }
-.history-view.active { display: flex; flex-direction: column; }
-.history-list {
-  flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch;
-}
+/* History pane */
+.history-list { max-height: 180px; overflow-y: auto; }
+.history-list::-webkit-scrollbar { width: 3px; }
+.history-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
 .history-entry {
-  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+  background: #f8fafc; border-radius: 12px; padding: 10px 12px; margin-bottom: 6px;
 }
-.history-entry .time {
-  font-size: 10px; color: #444; margin-bottom: 6px;
-}
-.history-entry .q {
-  color: #8ca4ff; font-weight: 500; font-size: 13px; margin-bottom: 4px;
-}
-.history-entry .a {
-  color: #b0b0c0; font-size: 13px; line-height: 1.5;
-}
+.history-entry .time { font-size: 10px; color: #94a3b8; margin-bottom: 3px; }
+.history-entry .q { color: #f59e0b; font-weight: 600; font-size: 12px; }
+.history-entry .a { color: #475569; font-size: 12px; margin-top: 2px; line-height: 1.4; }
 .history-empty {
-  display: flex; align-items: center; justify-content: center; height: 100%;
-  color: #444; font-size: 14px; text-align: center; padding: 40px;
+  text-align: center; color: #94a3b8; font-size: 13px; padding: 24px 16px;
 }
-.history-footer {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 12px; background: rgba(255,255,255,0.03); border-radius: 8px;
-  margin: 0 12px 4px; font-size: 11px; color: #555; flex-shrink: 0;
-}
+.history-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
 .history-footer button {
-  background: none; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
-  padding: 4px 12px; color: #666; font-size: 11px; cursor: pointer;
+  background: none; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 12px;
+  color: #94a3b8; font-size: 11px; cursor: pointer;
 }
-.history-footer button:hover { color: #f87171; border-color: rgba(248,113,113,0.3); }
+.history-footer button:hover { color: #dc2626; border-color: #fecaca; }
 
-/* ---- BOTTOM BAR ---- */
-.bottom-bar {
-  display: flex; align-items: center; justify-content: space-around;
-  background: linear-gradient(0deg, #12121e 0%, #1a1a2e 100%);
-  border-top: 1px solid rgba(108,140,255,0.12); padding: 6px 0 env(safe-area-inset-bottom);
-  flex-shrink: 0; z-index: 10;
+/* Transcript bar */
+.transcript-bar {
+  background: #f8fafc; border-radius: 12px; padding: 8px 12px;
+  margin: 4px 0 8px; font-size: 13px; color: #64748b; text-align: center;
+  min-height: 36px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #f1f5f9;
+}
+.transcript-bar.has-answer { color: #475569; border-color: #fde68a; }
+.transcript-bar .q { color: #f59e0b; font-weight: 600; }
+.transcript-bar .sep { margin: 0 6px; color: #cbd5e1; }
+
+/* ---- MIC + TABS ---- */
+.bottom-actions {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+}
+.mic-btn-wrapper {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0;
+}
+.mic-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+  background: #0f172a; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; touch-action: manipulation;
+  box-shadow: 0 4px 12px rgba(15,23,42,0.15);
+}
+.mic-btn:active { transform: scale(0.92); }
+.mic-btn svg { width: 22px; height: 22px; fill: #fff; }
+.mic-btn.listening { background: #dc2626; box-shadow: 0 0 0 4px rgba(220,38,38,0.15); }
+.mic-btn.processing { background: #d97706; box-shadow: 0 0 0 4px rgba(217,119,6,0.15); }
+.mic-btn.speaking { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.15); }
+.mic-label { font-size: 9px; color: #94a3b8; font-weight: 500; }
+
+.tab-row {
+  display: flex; flex: 1; gap: 4px; background: #f1f5f9; border-radius: 12px; padding: 3px;
 }
 .tab-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  background: none; border: none; color: #555; font-size: 10px; font-weight: 500;
-  cursor: pointer; padding: 6px 16px; transition: color 0.2s; touch-action: manipulation;
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: transparent; border: none; color: #94a3b8; font-size: 9px; font-weight: 600;
+  cursor: pointer; padding: 6px 4px; border-radius: 10px; transition: all 0.15s;
+  touch-action: manipulation;
 }
-.tab-btn svg { width: 22px; height: 22px; fill: #555; transition: fill 0.2s; }
-.tab-btn.active { color: #8ca4ff; }
-.tab-btn.active svg { fill: #8ca4ff; }
-.tab-btn:active { transform: scale(0.92); }
-
-.tab-mic-btn {
-  display: flex; flex-direction: column; align-items: center; background: none;
-  border: none; cursor: pointer; touch-action: manipulation;
-  position: relative; margin-top: -18px;
-}
-.tab-mic-btn .mic-ring {
-  width: 56px; height: 56px; border-radius: 50%;
-  background: linear-gradient(135deg, #2a2a3e 0%, #363652 100%);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
-  transition: all 0.3s;
-}
-.tab-mic-btn .mic-ring svg { width: 26px; height: 26px; fill: #666; transition: fill 0.3s; }
-.tab-mic-btn:active .mic-ring { transform: scale(0.92); }
-
-.tab-mic-btn.listening .mic-ring { background: linear-gradient(135deg, #4a1515 0%, #5a1a1a 100%); box-shadow: 0 0 0 6px rgba(248,113,113,0.15); }
-.tab-mic-btn.listening .mic-ring svg { fill: #f87171; }
-.tab-mic-btn.processing .mic-ring { background: linear-gradient(135deg, #4a3510 0%, #5a4415 100%); box-shadow: 0 0 0 6px rgba(251,191,36,0.15); }
-.tab-mic-btn.processing .mic-ring svg { fill: #fbbf24; }
-.tab-mic-btn.speaking .mic-ring { background: linear-gradient(135deg, #0f2a1a 0%, #143a22 100%); box-shadow: 0 0 0 6px rgba(74,222,128,0.15); }
-.tab-mic-btn.speaking .mic-ring svg { fill: #4ade80; }
-
-.tab-mic-status { font-size: 10px; color: #555; margin-top: 2px; min-height: 14px; }
+.tab-btn svg { width: 18px; height: 18px; fill: #94a3b8; transition: fill 0.15s; }
+.tab-btn.active { background: #fff; color: #0f172a; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.tab-btn.active svg { fill: #f59e0b; }
 
 /* ---- RESPONSIVE ---- */
 @media (max-width: 600px) {
-  header { padding: 8px 12px; }
-  header h1 { font-size: 16px; }
-  .status-bar { gap: 5px; }
-  .badge { padding: 2px 8px; font-size: 9px; }
-  .settings-panel { width: calc(100vw - 24px); right: -6px; }
-  .camera-section { padding: 6px 8px 2px; }
-  .placeholder-icon { font-size: 44px; }
-  .placeholder button { padding: 14px 32px; font-size: 16px; min-width: 160px; }
-  .tab-btn { padding: 4px 10px; }
-  .tab-btn svg { width: 20px; height: 20px; }
-  .tab-mic-btn .mic-ring { width: 48px; height: 48px; }
-  .tab-mic-btn .mic-ring svg { width: 22px; height: 22px; }
+  .floating-header { top: 8px; left: 8px; right: 8px; padding: 8px 12px; }
+  .floating-header h1 { font-size: 16px; }
+  .camera-pip { width: 100px; height: 75px; top: 64px; right: 8px; }
+  .bottom-sheet {
+    left: 8px; right: 8px; bottom: 8px; padding: 12px 12px 10px; border-radius: 16px;
+  }
+  .mic-btn { width: 46px; height: 46px; }
+  .mic-btn svg { width: 19px; height: 19px; }
+  .settings-panel { width: calc(100vw - 24px); right: -4px; }
 }
+
+/* ---- Leaflet overrides ---- */
+.leaflet-control-zoom a { background: #fff !important; color: #0f172a !important; border-color: #e2e8f0 !important; }
+.leaflet-control-attribution { font-size: 9px !important; }
 </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <h1>Ally</h1>
-    <div class="status-bar">
-      <span class="badge badge-yellow" id="modelBadge">Model: --</span>
-      <span class="badge badge-red" id="personBadge">Person</span>
+  <!-- FLOATING HEADER -->
+  <header class="floating-header">
+    <h1><span>Ally</span></h1>
+    <div class="header-badges">
+      <span class="badge badge-yellow" id="modelBadge">Thinking</span>
+      <span class="badge badge-green" id="personBadge">Person</span>
       <span class="detection-badge" id="detectionCount">0</span>
       <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
       <div class="settings-panel" id="settingsPanel">
@@ -253,7 +244,7 @@ header h1 {
         <input type="password" id="apiKeyInput" placeholder="sk_..." value="sk_5a7aece3d8b30d3909a939a13e3a6488abff69f0adb77f20">
         <label for="voiceSelect">Voice</label>
         <select id="voiceSelect">
-          <option value="21m00Tcm4TlvDq8ikWAM">Rachel (default)</option>
+          <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
           <option value="EXAVITQu4vrVxn66s0DB">Bella</option>
           <option value="ThT5KcBeYPX3keUQqPhg">Chris</option>
           <option value="TxGEqnHWrfWFTfGW9XjX">Josh</option>
@@ -269,104 +260,95 @@ header h1 {
         <div id="voiceStatus"></div>
         <div class="row">
           <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
-          <span class="hint">Falls back to browser TTS</span>
         </div>
       </div>
     </div>
   </header>
 
-  <div class="main">
+  <!-- MAP (full background) -->
+  <div id="map"></div>
 
-    <!-- CAMERA VIEW -->
-    <div class="view camera-view active" id="cameraView">
-      <div class="camera-section">
-        <div class="video-container" id="videoContainer">
-          <video id="video" autoplay playsinline muted></video>
-          <canvas id="overlay"></canvas>
-          <div class="placeholder" id="placeholder">
-            <div class="placeholder-icon">📷</div>
-            <div class="placeholder-text">Camera not started</div>
-            <div class="placeholder-sub">Position your phone at chest height</div>
-            <button id="startCameraBtn">Start Camera</button>
-          </div>
-        </div>
-        <div class="camera-footer">
-          <div class="stat-group">
-            <span class="stat-item"><span class="dot off" id="camDot"></span><span id="cameraStatus">Off</span></span>
-            <span class="stat-item" id="fpsDisplay">--</span>
-          </div>
-          <span class="stat-item" id="objCount">0 objects</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- MAP VIEW -->
-    <div class="view map-view" id="mapView">
-      <div class="map-container">
-        <div id="map"></div>
-        <div class="map-overlay" id="mapOverlay">
-          <div class="name" id="mapLocationName">Locating...</div>
-          <div id="mapCoords"></div>
-        </div>
-      </div>
-      <div class="map-footer">
-        <span id="mapAccuracy">GPS: --</span>
-        <span id="mapBuildings">0 buildings nearby</span>
-      </div>
-    </div>
-
-    <!-- HISTORY VIEW -->
-    <div class="view history-view" id="historyView">
-      <div class="history-list" id="historyList">
-        <div class="history-empty" id="historyEmpty">No conversations yet.<br>Tap the mic and ask a question.</div>
-      </div>
-      <div class="history-footer">
-        <span id="historyCount">0 conversations</span>
-        <button id="clearHistoryBtn">Clear</button>
-      </div>
-    </div>
-
+  <!-- CAMERA PIP -->
+  <div class="camera-pip" id="cameraPip">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <div class="pip-label" id="pipLabel">Camera</div>
   </div>
 
-  <!-- BOTTOM BAR -->
-  <div class="bottom-bar">
-    <button class="tab-btn active" data-tab="camera" aria-label="Camera view">
-      <svg viewBox="0 0 24 24"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
-      <span>Camera</span>
-    </button>
-    <button class="tab-btn" data-tab="map" aria-label="Map view">
-      <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
-      <span>Map</span>
-    </button>
-    <button class="tab-mic-btn" id="micBtn" aria-label="Tap to speak">
-      <div class="mic-ring">
-        <svg viewBox="0 0 24 24">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
+  <!-- BOTTOM SHEET -->
+  <div class="bottom-sheet" id="bottomSheet">
+    <div class="view-content">
+
+      <!-- Camera pane -->
+      <div class="view-pane active" id="cameraPane">
+        <div id="cameraSheetContent"></div>
       </div>
-      <span class="tab-mic-status" id="micStatus">Tap</span>
-    </button>
-    <button class="tab-btn" data-tab="history" aria-label="History view">
-      <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-      <span>History</span>
-    </button>
+
+      <!-- Map pane -->
+      <div class="view-pane" id="mapPane">
+        <div class="map-pane-info">
+          <div>
+            <div class="bldg" id="nearestBldg">Locating...</div>
+            <div class="detail" id="nearestDist"></div>
+          </div>
+          <div class="gps" id="gpsInfo">--</div>
+        </div>
+      </div>
+
+      <!-- History pane -->
+      <div class="view-pane" id="historyPane">
+        <div class="history-list" id="historyList">
+          <div class="history-empty" id="historyEmpty">No conversations yet.<br>Tap the mic to ask a question.</div>
+        </div>
+        <div class="history-footer">
+          <span style="font-size:11px;color:#94a3b8;" id="historyCount">0 conversations</span>
+          <button id="clearHistoryBtn">Clear</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Transcript -->
+    <div class="transcript-bar" id="transcriptBar">
+      <span id="transcriptText">Navigation active</span>
+    </div>
+
+    <!-- Bottom actions -->
+    <div class="bottom-actions">
+      <div class="mic-btn-wrapper">
+        <button class="mic-btn" id="micBtn" aria-label="Tap to speak">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+        <span class="mic-label" id="micLabel">Tap</span>
+      </div>
+      <div class="tab-row">
+        <button class="tab-btn active" data-tab="camera" aria-label="Camera">
+          <svg viewBox="0 0 24 24"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
+          <span>Camera</span>
+        </button>
+        <button class="tab-btn" data-tab="map" aria-label="Map">
+          <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+          <span>Map</span>
+        </button>
+        <button class="tab-btn" data-tab="history" aria-label="History">
+          <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          <span>History</span>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
-// ---- DOM refs ----
+// ---- DOM ----
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
-const placeholder = document.getElementById('placeholder');
-const startBtn = document.getElementById('startCameraBtn');
 const modelBadge = document.getElementById('modelBadge');
 const personBadge = document.getElementById('personBadge');
 const detectionCount = document.getElementById('detectionCount');
-const fpsDisplay = document.getElementById('fpsDisplay');
-const cameraStatus = document.getElementById('cameraStatus');
-const objCount = document.getElementById('objCount');
-const camDot = document.getElementById('camDot');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -376,94 +358,85 @@ const testVoiceBtn = document.getElementById('testVoiceBtn');
 const voiceStatus = document.getElementById('voiceStatus');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const micBtn = document.getElementById('micBtn');
-const micStatus = document.getElementById('micStatus');
-const tabBtns = document.querySelectorAll('.tab-btn');
-const views = document.querySelectorAll('.view');
-const cameraView = document.getElementById('cameraView');
-const mapView = document.getElementById('mapView');
-const historyView = document.getElementById('historyView');
+const micLabel = document.getElementById('micLabel');
+const cameraPip = document.getElementById('cameraPip');
+const pipLabel = document.getElementById('pipLabel');
+const bottomSheet = document.getElementById('bottomSheet');
+const cameraPane = document.getElementById('cameraPane');
+const mapPane = document.getElementById('mapPane');
+const historyPane = document.getElementById('historyPane');
+const cameraSheetContent = document.getElementById('cameraSheetContent');
+const nearestBldg = document.getElementById('nearestBldg');
+const nearestDist = document.getElementById('nearestDist');
+const gpsInfo = document.getElementById('gpsInfo');
 const historyList = document.getElementById('historyList');
 const historyEmpty = document.getElementById('historyEmpty');
 const historyCount = document.getElementById('historyCount');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-const mapOverlay = document.getElementById('mapOverlay');
-const mapLocationName = document.getElementById('mapLocationName');
-const mapCoords = document.getElementById('mapCoords');
-const mapAccuracy = document.getElementById('mapAccuracy');
-const mapBuildings = document.getElementById('mapBuildings');
+const transcriptText = document.getElementById('transcriptText');
+const tabBtns = document.querySelectorAll('.tab-btn');
+const viewPanes = document.querySelectorAll('.view-pane');
 
 let mediaStream = null;
 let detectionInterval = null;
 let isStreaming = false;
 let lastDetections = [];
-let activeView = 'camera';
+let activeTab = 'camera';
 
-// ---- ElevenLabs Settings ----
+// ---- ElevenLabs ----
 let elevenLabsKey = '';
 let elevenLabsVoice = '21m00Tcm4TlvDq8ikWAM';
 let elevenLabsChars = 0;
 
 function loadSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem('ally_settings') || '{}');
-    elevenLabsKey = saved.key || '';
-    elevenLabsVoice = saved.voice || '21m00Tcm4TlvDq8ikWAM';
-    elevenLabsChars = saved.chars || 0;
-    apiKeyInput.value = elevenLabsKey;
-    voiceSelect.value = elevenLabsVoice;
+    const s = JSON.parse(localStorage.getItem('ally_settings') || '{}');
+    elevenLabsKey = s.key || ''; elevenLabsVoice = s.voice || '21m00Tcm4TlvDq8ikWAM'; elevenLabsChars = s.chars || 0;
+    apiKeyInput.value = elevenLabsKey; voiceSelect.value = elevenLabsVoice;
     charStat.textContent = `${elevenLabsChars} chars used`;
   } catch (e) {}
 }
 function saveSettings() {
-  elevenLabsKey = apiKeyInput.value.trim();
-  elevenLabsVoice = voiceSelect.value;
-  localStorage.setItem('ally_settings', JSON.stringify({
-    key: elevenLabsKey, voice: elevenLabsVoice, chars: elevenLabsChars,
-  }));
-  voiceStatus.textContent = 'Saved.';
-  voiceStatus.className = 'status-ok';
+  elevenLabsKey = apiKeyInput.value.trim(); elevenLabsVoice = voiceSelect.value;
+  localStorage.setItem('ally_settings', JSON.stringify({ key: elevenLabsKey, voice: elevenLabsVoice, chars: elevenLabsChars }));
+  voiceStatus.textContent = 'Saved.'; voiceStatus.className = 'status-ok';
   setTimeout(() => { voiceStatus.textContent = ''; }, 2000);
 }
 loadSettings();
 if (apiKeyInput.value && !elevenLabsKey) saveSettings();
 
-// ---- State machine ----
+// ---- State ----
 const STATE = { IDLE: 0, LISTENING: 1, PROCESSING: 2, SPEAKING: 3 };
 let state = STATE.IDLE;
 let abortController = null;
 
-// ---- Tracking & Smoothing ----
+// ---- Tracking ----
 let smoothedDetections = [];
 const SMOOTH_ALPHA = 0.35;
-
 const CLASS_COLORS = {
-  person: '#ff4444', bicycle: '#ff8800', car: '#ffaa00', motorcycle: '#ff8800',
-  bus: '#ff6600', truck: '#ff6600', bottle: '#44ccff', cup: '#44ccff',
-  'wine glass': '#44ccff', chair: '#88ff44', couch: '#88ff44', bench: '#88ff44',
-  'dining table': '#88ff44', 'potted plant': '#44ff88', book: '#ff44ff',
-  'cell phone': '#44ffcc', laptop: '#44ffcc', tv: '#44ffcc', remote: '#44ffcc',
-  keyboard: '#44ffcc', mouse: '#44ffcc', backpack: '#ff88ff', umbrella: '#ff88ff',
-  handbag: '#ff88ff', suitcase: '#ff88ff', 'stop sign': '#ff3333',
-  'traffic light': '#ff3333', 'fire hydrant': '#ff3333', bed: '#88aaff',
-  bird: '#aaff88', cat: '#aaff88', dog: '#aaff88', horse: '#aaff88',
-  bowl: '#44ccff', banana: '#ffee44', apple: '#ff4444',
-  sandwich: '#ffaa44', orange: '#ff8800', carrot: '#ff8800',
-  cake: '#ff88cc', donut: '#ff88cc', pizza: '#ffaa44',
+  person: '#ef4444', bicycle: '#f97316', car: '#eab308', motorcycle: '#f97316',
+  bus: '#ea580c', truck: '#ea580c', bottle: '#3b82f6', cup: '#3b82f6',
+  'wine glass': '#3b82f6', chair: '#22c55e', couch: '#22c55e', bench: '#22c55e',
+  'dining table': '#22c55e', 'potted plant': '#10b981', book: '#a855f7',
+  'cell phone': '#06b6d4', laptop: '#06b6d4', tv: '#06b6d4', remote: '#06b6d4',
+  keyboard: '#06b6d4', mouse: '#06b6d4', backpack: '#d946ef', umbrella: '#d946ef',
+  handbag: '#d946ef', suitcase: '#d946ef', 'stop sign': '#ef4444',
+  'traffic light': '#ef4444', 'fire hydrant': '#ef4444', bed: '#6366f1',
+  bird: '#22c55e', cat: '#22c55e', dog: '#22c55e', horse: '#84cc16',
+  bowl: '#06b6d4', banana: '#eab308', apple: '#ef4444',
+  sandwich: '#f97316', orange: '#f97316', carrot: '#f97316',
+  cake: '#ec4899', donut: '#ec4899', pizza: '#f97316',
 };
+function getClassColor(l) { return CLASS_COLORS[l] || '#22c55e'; }
 
-function getClassColor(label) { return CLASS_COLORS[label] || '#44ff88'; }
-
-function matchAndSmooth(rawDetections) {
+function matchAndSmooth(raw) {
   const matched = new Set();
-  for (const nd of rawDetections) {
-    const ncx = (nd.bbox[0] + nd.bbox[2]) / 2;
-    const ncy = (nd.bbox[1] + nd.bbox[3]) / 2;
-    let best = null; let bestDist = Infinity;
+  for (const nd of raw) {
+    const ncx = (nd.bbox[0] + nd.bbox[2]) / 2, ncy = (nd.bbox[1] + nd.bbox[3]) / 2;
+    let best = null, bestDist = Infinity;
     for (const sd of smoothedDetections) {
-      if (nd.label !== sd.label) continue;
-      if (matched.has(sd)) continue;
-      const scx = (sd.bbox[0] + sd.bbox[2]) / 2;
-      const scy = (sd.bbox[1] + sd.bbox[3]) / 2;
+      if (nd.label !== sd.label || matched.has(sd)) continue;
+      const scx = (sd.bbox[0] + sd.bbox[2]) / 2, scy = (sd.bbox[1] + sd.bbox[3]) / 2;
       const d = Math.hypot(ncx - scx, ncy - scy);
       if (d < bestDist && d < 120) { bestDist = d; best = sd; }
     }
@@ -471,11 +444,11 @@ function matchAndSmooth(rawDetections) {
       for (let i = 0; i < 4; i++) best.bbox[i] = best.bbox[i] * (1 - SMOOTH_ALPHA) + nd.bbox[i] * SMOOTH_ALPHA;
       best.confidence = nd.confidence; matched.add(best);
     } else {
-      const newSd = { bbox: [...nd.bbox], confidence: nd.confidence, label: nd.label };
-      smoothedDetections.push(newSd); matched.add(newSd);
+      const n = { bbox: [...nd.bbox], confidence: nd.confidence, label: nd.label };
+      smoothedDetections.push(n); matched.add(n);
     }
   }
-  smoothedDetections = smoothedDetections.filter(sd => matched.has(sd));
+  smoothedDetections = smoothedDetections.filter(s => matched.has(s));
 }
 
 // ---- Audio cues ----
@@ -484,39 +457,57 @@ function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
 }
-function playTone(freq, duration, type = 'sine') {
+function playTone(f, d, t = 'sine') {
   try {
-    const ctx = getAudioCtx();
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = freq; osc.type = type;
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + duration);
+    const ctx = getAudioCtx(); const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.frequency.value = f; o.type = t;
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + d);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime + d);
   } catch (e) {}
 }
-function beepStart() { playTone(400, 0.15); }
-function beepCaptured() { playTone(660, 0.08); setTimeout(() => playTone(880, 0.1), 100); }
-function beepDone() { playTone(660, 0.1); }
-function beepError() { playTone(300, 0.3, 'sawtooth'); }
+function beepStart() { playTone(400, 0.12); }
+function beepCaptured() { playTone(660, 0.06); setTimeout(() => playTone(880, 0.08), 80); }
+function beepError() { playTone(300, 0.25, 'sawtooth'); }
 
 // ---- Tab switching ----
-function switchView(viewId) {
-  activeView = viewId;
-  views.forEach(v => v.classList.remove('active'));
-  document.getElementById(viewId + 'View').classList.add('active');
-  tabBtns.forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === viewId);
-  });
-  if (viewId === 'map') initMap();
-  if (viewId === 'history') renderHistory();
+function switchTab(tab) {
+  activeTab = tab;
+  tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  viewPanes.forEach(p => p.classList.remove('active'));
+  const paneMap = { camera: cameraPane, map: mapPane, history: historyPane };
+  if (paneMap[tab]) paneMap[tab].classList.add('active');
+  if (tab === 'map' && !mapInitialized) initMap();
+  if (tab === 'history') renderHistory();
 }
-
-tabBtns.forEach(btn => {
-  btn.addEventListener('click', () => switchView(btn.dataset.tab));
-});
+tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
 // ---- Camera ----
+let cameraStarted = false;
+
+function renderCameraSheet() {
+  if (!cameraStarted) {
+    cameraSheetContent.innerHTML = `
+      <div class="camera-sheet-placeholder">
+        <div class="icon">📷</div>
+        <p>Camera not started</p>
+        <button id="startCameraBtn">Start Camera</button>
+      </div>`;
+    document.getElementById('startCameraBtn').addEventListener('click', startCamera);
+    pipLabel.textContent = 'Camera off';
+  } else {
+    const count = smoothedDetections.length;
+    const hasPerson = smoothedDetections.some(d => d.label === 'person');
+    cameraSheetContent.innerHTML = `
+      <div class="camera-sheet-stats">
+        <div class="stat"><span class="val">${count}</span><span class="lbl">Objects</span></div>
+        <div class="stat"><span class="val" style="color:${hasPerson ? '#dc2626' : '#16a34a'}">${hasPerson ? 'Yes' : 'No'}</span><span class="lbl">Person</span></div>
+        <div class="stat"><span class="val" id="camFpsVal">--</span><span class="lbl">Latency</span></div>
+      </div>`;
+    pipLabel.textContent = `${count} obj`;
+  }
+}
+
 async function startCamera() {
   speakText('Starting camera.');
   try {
@@ -525,64 +516,63 @@ async function startCamera() {
       audio: false,
     });
     video.srcObject = mediaStream;
-    placeholder.style.display = 'none';
-    cameraStatus.textContent = 'On';
-    camDot.className = 'dot on';
+    cameraStarted = true;
+    cameraPip.classList.add('active');
     await video.play();
     overlay.width = video.videoWidth || 640;
     overlay.height = video.videoHeight || 480;
+    renderCameraSheet();
     startDetectionLoop();
     setState(STATE.IDLE);
+    if (activeTab === 'camera') renderCameraSheet();
   } catch (err) {
     console.error('Camera error:', err);
     speakText('Camera access denied. Please allow camera permissions.');
   }
 }
-startBtn.addEventListener('click', startCamera);
 
-// ---- Detection Loop ----
+// ---- Detection ----
 async function runDetection() {
   if (video.readyState < 2) return;
-  const w = video.videoWidth; const h = video.videoHeight;
+  const w = video.videoWidth, h = video.videoHeight;
   if (w === 0 || h === 0) return;
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, w, h);
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.7));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.drawImage(video, 0, 0, w, h);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.7));
   if (!blob) return;
-  const formData = new FormData(); formData.append('file', blob, 'frame.jpg');
+  const fd = new FormData(); fd.append('file', blob, 'frame.jpg');
   const t0 = performance.now();
   try {
-    const res = await fetch('/api/detect', { method: 'POST', body: formData });
+    const res = await fetch('/api/detect', { method: 'POST', body: fd });
     const data = await res.json();
     lastDetections = data.detections || [];
     matchAndSmooth(lastDetections);
     drawOverlay(w, h, smoothedDetections, data.person || false);
-    const elapsed = (performance.now() - t0).toFixed(0);
-    fpsDisplay.textContent = `${elapsed}ms`;
+    const el = (performance.now() - t0).toFixed(0);
     detectionCount.textContent = `${smoothedDetections.length}`;
-    objCount.textContent = `${smoothedDetections.length} object${smoothedDetections.length !== 1 ? 's' : ''}`;
-    personBadge.textContent = data.person ? 'Person' : 'Person';
+    personBadge.textContent = 'Person';
     personBadge.className = `badge ${data.person ? 'badge-red' : 'badge-green'}`;
+    pipLabel.textContent = `${smoothedDetections.length} obj`;
+    const fpsEl = document.getElementById('camFpsVal');
+    if (fpsEl) fpsEl.textContent = `${el}ms`;
+    if (activeTab === 'camera') renderCameraSheet();
   } catch (err) { console.error('Detection error:', err); }
 }
 
-function drawOverlay(w, h, detections, person) {
+function drawOverlay(w, h, detections) {
   overlay.width = w; overlay.height = h;
-  const ctx = overlay.getContext('2d');
-  ctx.clearRect(0, 0, w, h);
+  const ctx = overlay.getContext('2d'); ctx.clearRect(0, 0, w, h);
   for (const d of detections) {
     const [x1, y1, x2, y2] = d.bbox;
     const color = getClassColor(d.label);
-    ctx.strokeStyle = color; ctx.lineWidth = 3;
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 4;
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1); ctx.shadowBlur = 0;
-    const label = `${d.label} ${(d.confidence * 100).toFixed(0)}%`;
-    ctx.font = 'bold 13px sans-serif';
-    const fm = ctx.measureText(label); const lh = 22;
-    ctx.fillStyle = color; ctx.fillRect(x1, y1 - lh, fm.width + 10, lh);
-    ctx.fillStyle = '#000'; ctx.fillText(label, x1 + 5, y1 - 6);
+    const label = `${d.label}`;
+    ctx.font = 'bold 10px sans-serif';
+    const fm = ctx.measureText(label); const lh = 18;
+    ctx.fillStyle = color; ctx.fillRect(x1, y1 - lh, fm.width + 8, lh);
+    ctx.fillStyle = '#fff'; ctx.fillText(label, x1 + 4, y1 - 5);
   }
 }
 
@@ -600,7 +590,6 @@ let currentAudio = null;
 let responseBuffer = '';
 let spokenIndex = 0;
 let streamComplete = false;
-
 let lastNavTime = 0;
 let lastNavSignature = '';
 
@@ -626,39 +615,30 @@ function onSpeechDone() {
 }
 
 function speakWithBrowser(text, onDone) {
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.0;
-  utterance.onend = onDone;
-  utterance.onerror = () => { speechQueue = []; speechActive = false; setState(STATE.IDLE); };
-  window.speechSynthesis.speak(utterance);
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.0; u.onend = onDone;
+  u.onerror = () => { speechQueue = []; speechActive = false; setState(STATE.IDLE); };
+  window.speechSynthesis.speak(u);
 }
 
 async function speakWithElevenLabs(text, onDone) {
   try {
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoice}/stream`, {
-      method: 'POST',
-      headers: { 'xi-api-key': elevenLabsKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text, model_id: 'eleven_turbo_v2',
-        voice_settings: { stability: 0.35, similarity_boost: 0.75 },
-      }),
+      method: 'POST', headers: { 'xi-api-key': elevenLabsKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, model_id: 'eleven_turbo_v2', voice_settings: { stability: 0.35, similarity_boost: 0.75 } }),
     });
-    if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`ElevenLabs ${res.status}: ${e}`); }
+    if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`EL ${res.status}: ${e}`); }
     const blob = await res.blob();
     elevenLabsChars += text.length;
     charStat.textContent = `${elevenLabsChars} chars used`;
-    const saved = JSON.parse(localStorage.getItem('ally_settings') || '{}');
-    saved.chars = elevenLabsChars; localStorage.setItem('ally_settings', JSON.stringify(saved));
+    const s = JSON.parse(localStorage.getItem('ally_settings') || '{}');
+    s.chars = elevenLabsChars; localStorage.setItem('ally_settings', JSON.stringify(s));
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    currentAudio = audio;
+    const audio = new Audio(url); currentAudio = audio;
     audio.onended = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
     audio.onerror = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
     await audio.play();
-  } catch (e) {
-    console.error('ElevenLabs error:', e);
-    speakWithBrowser(text, onDone);
-  }
+  } catch (e) { console.error('EL error:', e); speakWithBrowser(text, onDone); }
 }
 
 async function testElevenLabs() {
@@ -668,12 +648,8 @@ async function testElevenLabs() {
   testVoiceBtn.disabled = true;
   try {
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceSelect.value}/stream`, {
-      method: 'POST',
-      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: 'Hello, this is a test of my voice.', model_id: 'eleven_turbo_v2',
-        voice_settings: { stability: 0.35, similarity_boost: 0.75 },
-      }),
+      method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'Hello, this is a test.', model_id: 'eleven_turbo_v2', voice_settings: { stability: 0.35, similarity_boost: 0.75 } }),
     });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const blob = await res.blob();
@@ -686,84 +662,53 @@ async function testElevenLabs() {
   testVoiceBtn.disabled = false;
 }
 
-// ---- State Management ----
+// ---- State ----
 function setState(newState, statusText) {
   state = newState;
-  micBtn.className = 'tab-mic-btn';
-  if (state === STATE.IDLE) {
-    micStatus.textContent = statusText || 'Tap';
-    micBtn.setAttribute('aria-label', 'Tap to speak');
-  } else if (state === STATE.LISTENING) {
-    micBtn.classList.add('listening');
-    micStatus.textContent = statusText || 'Listening...';
-    micBtn.setAttribute('aria-label', 'Listening');
-  } else if (state === STATE.PROCESSING) {
-    micBtn.classList.add('processing');
-    micStatus.textContent = statusText || 'Thinking...';
-    micBtn.setAttribute('aria-label', 'Processing');
-  } else if (state === STATE.SPEAKING) {
-    micBtn.classList.add('speaking');
-    micStatus.textContent = statusText || 'Speaking...';
-    micBtn.setAttribute('aria-label', 'Speaking');
-  }
+  micBtn.className = 'mic-btn';
+  if (state === STATE.IDLE) { micLabel.textContent = statusText || 'Tap'; }
+  else if (state === STATE.LISTENING) { micBtn.classList.add('listening'); micLabel.textContent = statusText || 'Listening...'; }
+  else if (state === STATE.PROCESSING) { micBtn.classList.add('processing'); micLabel.textContent = statusText || 'Thinking...'; }
+  else if (state === STATE.SPEAKING) { micBtn.classList.add('speaking'); micLabel.textContent = statusText || 'Speaking...'; }
 }
 
-// ---- Speech Recognition ----
+// ---- Speech Rec ----
 const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 
 function handleVoiceCommand(text) {
-  const lower = text.toLowerCase();
-  const commands = {
-    'camera': /(?:switch to|show|open)\s*(?:the\s*)?camera|go to camera/,
-    'map': /(?:switch to|show|open)\s*(?:the\s*)?map|go to map|where am i/,
-    'history': /(?:switch to|show|open)\s*(?:the\s*)?(?:history|chat|conversation)/,
+  const l = text.toLowerCase();
+  const cmds = {
+    camera: /(?:switch|show|open).*camera/,
+    map: /(?:switch|show|open|where).*map|where am i/,
+    history: /(?:switch|show|open).*(?:history|chat)/,
   };
-  for (const [view, pattern] of Object.entries(commands)) {
-    if (pattern.test(lower)) {
-      switchView(view);
-      speakText(`Switching to ${view} view.`);
-      return true;
-    }
+  for (const [tab, pat] of Object.entries(cmds)) {
+    if (pat.test(l)) { switchTab(tab); speakText(`Switching to ${tab} view.`); return true; }
   }
   return false;
 }
 
 function startListening() {
-  if (!SpeechRecognitionAPI) {
-    setState(STATE.IDLE, 'Speech not supported');
-    beepError(); return;
-  }
-  if (!mediaStream) {
-    setState(STATE.IDLE, 'Start camera first');
-    beepError(); return;
-  }
+  if (!SpeechRecognitionAPI) { setState(STATE.IDLE, 'Not supported'); beepError(); return; }
+  if (!mediaStream) { setState(STATE.IDLE, 'Start camera first'); beepError(); return; }
   if (isStreaming) return;
-  stopSpeaking();
-  setState(STATE.LISTENING);
-  beepStart();
+  stopSpeaking(); setState(STATE.LISTENING); beepStart();
   recognition = new SpeechRecognitionAPI();
-  recognition.lang = 'en-US';
-  recognition.interimResults = false;
-  recognition.continuous = false;
-  recognition.maxAlternatives = 1;
+  recognition.lang = 'en-US'; recognition.interimResults = false; recognition.continuous = false; recognition.maxAlternatives = 1;
   recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript.trim();
-    if (text) {
-      beepCaptured();
-      if (handleVoiceCommand(text)) return;
-      setState(STATE.PROCESSING);
-      askQuestion(text);
-    } else { setState(STATE.IDLE, 'No speech heard'); }
+    const t = e.results[0][0].transcript.trim();
+    if (t) { beepCaptured(); if (handleVoiceCommand(t)) return; setState(STATE.PROCESSING); askQuestion(t); }
+    else setState(STATE.IDLE, 'No speech');
   };
   recognition.onerror = (e) => {
-    console.warn('Speech error:', e.error);
-    if (e.error === 'no-speech') setState(STATE.IDLE, 'No speech heard. Try again.');
+    console.warn('Speech:', e.error);
+    if (e.error === 'no-speech') setState(STATE.IDLE, 'No speech heard');
     else if (e.error === 'aborted') { if (state === STATE.LISTENING) setState(STATE.IDLE); }
-    else { beepError(); setState(STATE.IDLE, 'Speech error. Try again.'); }
+    else { beepError(); setState(STATE.IDLE, 'Speech error'); }
   };
-  recognition.onend = () => { if (state === STATE.LISTENING) setState(STATE.IDLE, 'No speech heard. Try again.'); };
-  try { recognition.start(); } catch (e) { setState(STATE.IDLE, 'Speech error. Try again.'); beepError(); }
+  recognition.onend = () => { if (state === STATE.LISTENING) setState(STATE.IDLE, 'No speech heard'); };
+  try { recognition.start(); } catch (e) { setState(STATE.IDLE, 'Speech error'); beepError(); }
 }
 
 function stopListening() {
@@ -783,52 +728,36 @@ function stopSpeaking() {
 
 // ---- Nav ----
 async function captureFrame() {
-  const w = video.videoWidth; const h = video.videoHeight;
+  const w = video.videoWidth, h = video.videoHeight;
   if (w === 0 || h === 0) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, w, h);
-  return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95));
 }
 
-function navSignature(detections) {
-  if (!detections || !detections.length) return 'empty';
-  return detections.map(d => `${d.label[0]}${Math.round(d.bbox[0]/120)}`).sort().join('');
+function navSignature(d) {
+  if (!d || !d.length) return 'empty';
+  return d.map(x => `${x.label[0]}${Math.round(x.bbox[0]/120)}`).sort().join('');
 }
 
 function generateNavGuidance(detections, frameW) {
-  if (!detections || detections.length === 0) return null;
+  if (!detections || !detections.length) return null;
   const left = [], center = [], right = [];
   for (const d of detections) {
-    const cx = (d.bbox[0] + d.bbox[2]) / 2;
-    const ratio = cx / frameW;
-    const area = (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1]);
-    const obj = { label: d.label, area };
-    if (ratio < 0.33) left.push(obj);
-    else if (ratio > 0.66) right.push(obj);
-    else center.push(obj);
+    const cx = (d.bbox[0] + d.bbox[2]) / 2, ratio = cx / frameW, area = (d.bbox[2] - d.bbox[0]) * (d.bbox[3] - d.bbox[1]);
+    const o = { label: d.label, area };
+    if (ratio < 0.33) left.push(o); else if (ratio > 0.66) right.push(o); else center.push(o);
   }
-  for (const arr of [left, center, right]) arr.sort((a, b) => b.area - a.area);
+  for (const a of [left, center, right]) a.sort((a, b) => b.area - a.area);
   const scene = [];
-  if (center.length) {
-    const names = [...new Set(center.map(o => o.label))];
-    scene.push(names.length === 1 ? `${names[0]} ahead` : `${names.slice(0, -1).join(', ')} and ${names.slice(-1)} ahead`);
-  }
-  if (left.length) {
-    const names = [...new Set(left.map(o => o.label))];
-    scene.push(names.length === 1 ? `${names[0]} on your left` : `${names.slice(0, -1).join(', ')} and ${names.slice(-1)} on your left`);
-  }
-  if (right.length) {
-    const names = [...new Set(right.map(o => o.label))];
-    scene.push(names.length === 1 ? `${names[0]} on your right` : `${names.slice(0, -1).join(', ')} and ${names.slice(-1)} on your right`);
-  }
+  if (center.length) { const n = [...new Set(center.map(o => o.label))]; scene.push(n.length === 1 ? `${n[0]} ahead` : `${n.slice(0,-1).join(', ')} and ${n.slice(-1)} ahead`); }
+  if (left.length) { const n = [...new Set(left.map(o => o.label))]; scene.push(n.length === 1 ? `${n[0]} on your left` : `${n.slice(0,-1).join(', ')} and ${n.slice(-1)} on your left`); }
+  if (right.length) { const n = [...new Set(right.map(o => o.label))]; scene.push(n.length === 1 ? `${n[0]} on your right` : `${n.slice(0,-1).join(', ')} and ${n.slice(-1)} on your right`); }
   const desc = scene.join('. ') + '.';
   if (center.length) {
-    const hasClearLeft = !left.length; const hasClearRight = !right.length;
-    if (hasClearLeft && hasClearRight) return `${desc} Stop.`;
-    if (hasClearLeft) return `${desc} Move left.`;
-    if (hasClearRight) return `${desc} Move right.`;
+    if (!left.length && !right.length) return `${desc} Stop.`;
+    if (!left.length) return `${desc} Move left.`;
+    if (!right.length) return `${desc} Move right.`;
     return `${desc} Move ${left[0].area > right[0].area ? 'right' : 'left'}.`;
   }
   if (left.length && right.length) return `${desc} Move straight ahead carefully.`;
@@ -841,181 +770,130 @@ function runNavigation() {
   if (speechQueue.length > 0) return;
   const now = Date.now();
   if (now - lastNavTime < 8000) return;
-  const w = video.videoWidth;
-  if (w === 0) return;
+  const w = video.videoWidth; if (w === 0) return;
   const sig = navSignature(smoothedDetections);
   if (sig === lastNavSignature) {
     if (now - lastNavTime > 30000 && sig === 'empty') { lastNavTime = now; speakText('Waiting for objects.'); }
     return;
   }
   lastNavSignature = sig;
-  const guidance = generateNavGuidance(smoothedDetections, w);
-  if (guidance) { speakText(guidance); lastNavTime = now; }
+  const g = generateNavGuidance(smoothedDetections, w);
+  if (g) { speakText(g); lastNavTime = now; }
   else if (!smoothedDetections.length) { speakText('Path clear.'); lastNavTime = now; }
 }
 
 function startNavigation() {
   runNavigation();
   let lastTick = performance.now();
-  function navLoop(now) {
-    if (now - lastTick >= 4000) { lastTick = now; runNavigation(); }
-    requestAnimationFrame(navLoop);
-  }
-  requestAnimationFrame(navLoop);
+  function loop(now) { if (now - lastTick >= 4000) { lastTick = now; runNavigation(); } requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
 }
 
 // ---- Chat History ----
 let chatHistory = [];
-
-function loadHistory() {
-  try {
-    chatHistory = JSON.parse(localStorage.getItem('ally_chat_history') || '[]');
-  } catch (e) { chatHistory = []; }
-}
-
-function saveHistory() {
-  try {
-    localStorage.setItem('ally_chat_history', JSON.stringify(chatHistory));
-  } catch (e) {}
-}
-
-function addHistoryEntry(question, answer) {
-  chatHistory.push({ question, answer, timestamp: Date.now() });
-  saveHistory();
-  renderHistory();
-}
-
+function loadHistory() { try { chatHistory = JSON.parse(localStorage.getItem('ally_history') || '[]'); } catch (e) { chatHistory = []; } }
+function saveHistory() { try { localStorage.setItem('ally_history', JSON.stringify(chatHistory)); } catch (e) {} }
+function addHistory(q, a) { chatHistory.push({ q, a, t: Date.now() }); saveHistory(); renderHistory(); }
 function renderHistory() {
   if (!historyList) return;
-  if (chatHistory.length === 0) {
-    historyList.innerHTML = '<div class="history-empty">No conversations yet.<br>Tap the mic and ask a question.</div>';
-    historyCount.textContent = '0 conversations';
-    return;
+  if (!chatHistory.length) {
+    historyList.innerHTML = '<div class="history-empty">No conversations yet.<br>Tap the mic to ask a question.</div>';
+    historyCount.textContent = '0 conversations'; return;
   }
   let html = '';
   for (let i = chatHistory.length - 1; i >= 0; i--) {
-    const entry = chatHistory[i];
-    const d = new Date(entry.timestamp);
-    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    html += '<div class="history-entry">';
-    html += `<div class="time">${timeStr}</div>`;
-    html += `<div class="q">Q: ${escapeHtml(entry.question)}</div>`;
-    html += `<div class="a">${escapeHtml(entry.answer)}</div>`;
-    html += '</div>';
+    const e = chatHistory[i];
+    const d = new Date(e.t); const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    html += `<div class="history-entry"><div class="time">${ts}</div><div class="q">${esc(e.q)}</div><div class="a">${esc(e.a)}</div></div>`;
   }
   historyList.innerHTML = html;
   historyCount.textContent = `${chatHistory.length} conversation${chatHistory.length !== 1 ? 's' : ''}`;
 }
-
-function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
-
-function clearHistory() {
-  if (chatHistory.length === 0) return;
-  chatHistory = [];
-  saveHistory();
-  renderHistory();
-  speakText('Conversation history cleared.');
-}
-
-clearHistoryBtn.addEventListener('click', clearHistory);
-loadHistory();
-renderHistory();
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+clearHistoryBtn.addEventListener('click', () => { chatHistory = []; saveHistory(); renderHistory(); speakText('History cleared.'); });
+loadHistory(); renderHistory();
 
 // ---- Map ----
 let map = null;
 let mapInitialized = false;
 let userMarker = null;
-let buildingMarkers = [];
 let watchId = null;
 
-const CAMPUS_BUILDINGS = [
-  { name: 'DC — Davis Centre', lat: 43.4723, lng: -80.5449 },
-  { name: 'MC — Mathematics & Computer', lat: 43.4731, lng: -80.5418 },
-  { name: 'SLC — Student Life Centre', lat: 43.4713, lng: -80.5449 },
-  { name: 'E7 — Engineering 7', lat: 43.4687, lng: -80.5449 },
-  { name: 'E5 — Engineering 5', lat: 43.4699, lng: -80.5406 },
-  { name: 'E3 — Engineering 3', lat: 43.4699, lng: -80.5421 },
-  { name: 'PAC — Physical Activities Complex', lat: 43.4716, lng: -80.5509 },
-  { name: 'STC — Science Teaching Complex', lat: 43.4714, lng: -80.5427 },
-  { name: 'HH — Hagey Hall', lat: 43.4733, lng: -80.5494 },
-  { name: 'AL — Arts Lecture Hall', lat: 43.4685, lng: -80.5489 },
-  { name: 'DWE — Douglas Wright Engineering', lat: 43.4694, lng: -80.5395 },
-  { name: 'BMH — B. C. Matthews Hall', lat: 43.4704, lng: -80.5478 },
-  { name: 'V1 — Village 1', lat: 43.4720, lng: -80.5464 },
-  { name: 'PHY — Physics Building', lat: 43.4709, lng: -80.5400 },
-  { name: 'QNC — Quantum Nano Centre', lat: 43.4704, lng: -80.5435 },
+const BUILDINGS = [
+  { n: 'DC — Davis Centre', lat: 43.4723, lng: -80.5449 },
+  { n: 'MC — Mathematics & Computer', lat: 43.4731, lng: -80.5418 },
+  { n: 'SLC — Student Life Centre', lat: 43.4713, lng: -80.5449 },
+  { n: 'E7 — Engineering 7', lat: 43.4687, lng: -80.5449 },
+  { n: 'E5 — Engineering 5', lat: 43.4699, lng: -80.5406 },
+  { n: 'E3 — Engineering 3', lat: 43.4699, lng: -80.5421 },
+  { n: 'PAC — Physical Activities Complex', lat: 43.4716, lng: -80.5509 },
+  { n: 'STC — Science Teaching Complex', lat: 43.4714, lng: -80.5427 },
+  { n: 'HH — Hagey Hall', lat: 43.4733, lng: -80.5494 },
+  { n: 'AL — Arts Lecture Hall', lat: 43.4685, lng: -80.5489 },
+  { n: 'DWE — Douglas Wright Engineering', lat: 43.4694, lng: -80.5395 },
+  { n: 'BMH — B. C. Matthews Hall', lat: 43.4704, lng: -80.5478 },
+  { n: 'V1 — Village 1', lat: 43.4720, lng: -80.5464 },
+  { n: 'PHY — Physics Building', lat: 43.4709, lng: -80.5400 },
+  { n: 'QNC — Quantum Nano Centre', lat: 43.4704, lng: -80.5435 },
 ];
 
 function initMap() {
   if (mapInitialized) { map.invalidateSize(); return; }
   mapInitialized = true;
   map = L.map('map', { zoomControl: false }).setView([43.4723, -80.5449], 16);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap',
-  }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  for (const b of CAMPUS_BUILDINGS) {
-    const marker = L.circleMarker([b.lat, b.lng], {
-      radius: 10, color: '#6c8cff', fillColor: '#6c8cff', fillOpacity: 0.4, weight: 2,
+  for (const b of BUILDINGS) {
+    const m = L.circleMarker([b.lat, b.lng], {
+      radius: 8, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.25, weight: 2,
     }).addTo(map);
-    marker.bindTooltip(b.name, { direction: 'top' });
-    marker.on('click', () => speakText(b.name));
-    buildingMarkers.push(marker);
+    m.bindTooltip(b.n, { direction: 'top' });
+    m.on('click', () => speakText(b.n));
   }
-  mapBuildings.textContent = `${CAMPUS_BUILDINGS.length} buildings`;
   if ('geolocation' in navigator) {
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        if (userMarker) userMarker.setLatLng([latitude, longitude]);
+        const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+        if (userMarker) userMarker.setLatLng([lat, lng]);
         else {
-          userMarker = L.circleMarker([latitude, longitude], {
-            radius: 8, color: '#4ade80', fillColor: '#4ade80', fillOpacity: 0.6, weight: 3,
-          }).addTo(map);
-          userMarker.bindTooltip('You are here', { direction: 'top' });
+          userMarker = L.circleMarker([lat, lng], { radius: 7, color: '#0f172a', fillColor: '#0f172a', fillOpacity: 0.7, weight: 3 }).addTo(map);
+          userMarker.bindTooltip('You', { direction: 'top' });
         }
-        map.setView([latitude, longitude]);
-        mapCoords.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-        mapAccuracy.textContent = `GPS: ${accuracy < 20 ? 'High' : accuracy < 100 ? 'Medium' : 'Low'} (±${Math.round(accuracy)}m)`;
-        let nearest = null; let nearestDist = Infinity;
-        for (const b of CAMPUS_BUILDINGS) {
-          const d = map.distance([latitude, longitude], [b.lat, b.lng]);
+        map.setView([lat, lng]);
+        gpsInfo.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        let nearest = null, nearestDist = Infinity;
+        for (const b of BUILDINGS) {
+          const d = map.distance([lat, lng], [b.lat, b.lng]);
           if (d < nearestDist) { nearestDist = d; nearest = b; }
         }
-        if (nearest && nearestDist < 100) mapLocationName.textContent = `Near: ${nearest.name}`;
-        else if (nearest) mapLocationName.textContent = `${nearest.name} (${Math.round(nearestDist)}m)`;
-        else mapLocationName.textContent = 'Waterloo Campus';
+        if (nearest) {
+          nearestBldg.textContent = nearest.n;
+          nearestDist.textContent = nearestDist < 100 ? 'You are nearby' : `${Math.round(nearestDist)}m away`;
+        } else { nearestBldg.textContent = 'Waterloo Campus'; nearestDist.textContent = ''; }
       },
-      (err) => {
-        console.warn('Geolocation error:', err.message);
-        mapLocationName.textContent = 'Location unavailable';
-        mapAccuracy.textContent = 'GPS: unavailable';
-      },
+      (err) => { nearestBldg.textContent = 'Location unavailable'; gpsInfo.textContent = '--'; },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
   }
   setTimeout(() => map.invalidateSize(), 300);
 }
 
+// ---- Token / Stream ----
 function processToken(token) {
   responseBuffer += token;
   const unspoken = responseBuffer.slice(spokenIndex);
   if (!unspoken.length) return;
-  let lastBreak = -1;
+  let br = -1;
   for (let i = 0; i < unspoken.length; i++) {
-    if ('.!?'.includes(unspoken[i]) && (i === unspoken.length - 1 || unspoken[i + 1] === ' ')) lastBreak = i + 1;
+    if ('.!?'.includes(unspoken[i]) && (i === unspoken.length - 1 || unspoken[i + 1] === ' ')) br = i + 1;
   }
-  if (lastBreak > 0) { speakText(unspoken.slice(0, lastBreak)); spokenIndex += lastBreak; }
+  if (br > 0) { speakText(unspoken.slice(0, br)); spokenIndex += br; }
 }
 
 function finishStream() {
   streamComplete = true;
-  const remaining = responseBuffer.slice(spokenIndex);
-  if (remaining.trim()) speakText(remaining);
+  const r = responseBuffer.slice(spokenIndex);
+  if (r.trim()) speakText(r);
   else if (speechQueue.length === 0) setState(STATE.IDLE);
 }
 
@@ -1023,46 +901,40 @@ function finishStream() {
 async function askQuestion(question) {
   if (isStreaming) return;
   responseBuffer = ''; spokenIndex = 0; streamComplete = false;
+  transcriptText.innerHTML = `<span class="q">${esc(question)}</span><span class="sep">→</span>Thinking...`;
   const blob = await captureFrame();
   if (!blob) { setState(STATE.IDLE, 'Camera error'); beepError(); return; }
-  const formData = new FormData();
-  formData.append('file', blob, 'question.jpg');
-  formData.append('question', question);
-  isStreaming = true;
-  abortController = new AbortController();
-  modelBadge.textContent = 'Model: thinking...';
-  modelBadge.className = 'badge badge-yellow';
+  const fd = new FormData(); fd.append('file', blob, 'q.jpg'); fd.append('question', question);
+  isStreaming = true; abortController = new AbortController();
+  modelBadge.className = 'badge badge-yellow'; modelBadge.textContent = 'Thinking';
   try {
-    const res = await fetch('/api/ask', { method: 'POST', body: formData, signal: abortController.signal });
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder(); let buffer = '';
+    const res = await fetch('/api/ask', { method: 'POST', body: fd, signal: abortController.signal });
+    const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop() || '';
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           try {
-            const data = JSON.parse(line.slice(6));
-            if (data.done) {
-              const modelUsed = data.model || '';
-              const modelLabel = modelUsed.includes('ollama') ? 'Open-Source' : 'Google Vision';
-              modelBadge.textContent = `Model: ${modelLabel}`;
-              modelBadge.className = `badge ${modelUsed.includes('ollama') ? 'badge-blue' : 'badge-green'}`;
-              addHistoryEntry(question, responseBuffer || '(empty response)');
-            } else if (data.token) processToken(data.token);
-          } catch (e) { console.warn('SSE parse error:', e); }
+            const d = JSON.parse(line.slice(6));
+            if (d.done) {
+              const m = d.model || '';
+              modelBadge.textContent = m.includes('ollama') ? 'Open Source' : 'Google Vision';
+              modelBadge.className = `badge ${m.includes('ollama') ? 'badge-blue' : 'badge-green'}`;
+              addHistory(question, responseBuffer || '(empty)');
+              transcriptText.innerHTML = `<span class="q">${esc(question)}</span><span class="sep">→</span>${esc(responseBuffer)}`;
+            } else if (d.token) processToken(d.token);
+          } catch (e) { console.warn('SSE:', e); }
         }
       }
     }
     finishStream();
   } catch (err) {
     if (err.name === 'AbortError') return;
-    console.error('Ask error:', err);
-    beepError(); setState(STATE.IDLE, 'Error. Try again.');
-    modelBadge.textContent = 'Model: error'; modelBadge.className = 'badge badge-red';
+    console.error('Ask:', err); beepError(); setState(STATE.IDLE, 'Error');
+    modelBadge.textContent = 'Error'; modelBadge.className = 'badge badge-red';
   }
   isStreaming = false; abortController = null;
 }
@@ -1083,7 +955,6 @@ micBtn.addEventListener('click', () => {
     case STATE.SPEAKING: stopSpeaking(); startListening(); break;
   }
 });
-
 micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
 
 // ---- Prime ----
@@ -1096,6 +967,7 @@ document.addEventListener('click', () => {
 
 // ---- Init ----
 setState(STATE.IDLE);
+renderCameraSheet();
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) micBtn.click();
 });

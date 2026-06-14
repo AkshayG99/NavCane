@@ -96,6 +96,18 @@ User asks question → Capture frame → YOLO11m detection (primary)
 
 ---
 
+## Advanced: Local Acceleration via LoRA IQS (Gemma)
+To maximize local inference speed when routing to the Person detected path, Ally supports fine-tuned Gemma-2B (VLM) instances leveraging Importance Quantization Matrix (IQS) GGUF formats.
+
+Why LoRA + IQS?
+Standard 4-bit quantization uniformly degrades model weights, often breaking the fragile cross-attention layers required for vision-language tasks.
+
+By applying a LoRA (Low-Rank Adaptation) adapter trained on specific edge-case vision instructions, and then baking it into an IQS-quantized base model (e.g., IQ4_NL or IQ3_K), we achieve:
+
+Preserved Visual IQ: Crucial weights identified by the importance matrix are kept at higher precision, preventing "hallucinated" object descriptions.
+
+Ultra-Low Memory Footprint: Reduces Gemma's VRAM requirements by up to 60%, allowing the visual LLM to sit comfortably alongside YOLO11m on standard consumer GPUs or Apple Silicon.
+
 ## Configuration
 
 | Variable | Default | Description |

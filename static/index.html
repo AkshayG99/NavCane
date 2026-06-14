@@ -1217,7 +1217,9 @@ async function fetchRoute(fromLat, fromLng, toLat, toLng) {
 }
 
 function displayRoute(geojson, steps, totalDist) {
+  const name = destName, lat = destLat, lng = destLng;
   clearRoute();
+  destName = name; destLat = lat; destLng = lng;
   routeSteps = steps;
   lastStepIndex = -1;
   routeActive = true;

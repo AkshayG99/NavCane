@@ -272,29 +272,16 @@ body {
       <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
       <div class="settings-panel" id="settingsPanel">
         <h3>Voice Settings</h3>
-        <label for="voiceIdInput">Voice ID</label>
-        <input type="text" id="voiceIdInput" placeholder="21m00Tcm4TlvDq8ikWAM">
-        <div style="font-size:11px;color:#94a3b8;margin:-8px 0 12px">
-          Find your ID at
-          <a href="https://elevenlabs.io/app/settings" target="_blank" rel="noopener">elevenlabs.io/app/settings</a>
-          → Default Voice
-        </div>
+        <label for="ttsAccent">Voice accent</label>
+        <select id="ttsAccent">
+          <option value="com">English (US)</option>
+          <option value="co.uk">English (UK)</option>
+          <option value="com.au">English (Australia)</option>
+          <option value="ca">English (Canada)</option>
+          <option value="co.in">English (India)</option>
+        </select>
         <div class="row">
-          <label style="font-size:12px;flex:1;">or pick preset:</label>
-          <select id="voiceSelect" style="flex:1;">
-            <option value="">— none —</option>
-            <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
-            <option value="EXAVITQu4vrVxn66s0DB">Bella</option>
-            <option value="ThT5KcBeYPX3keUQqPhg">Chris</option>
-            <option value="TxGEqnHWrfWFTfGW9XjX">Josh</option>
-            <option value="pNInz6obpgDQGcXmaG0Q">Adam</option>
-            <option value="AZnzlk1XvdvUeBnXmlld">Antoni</option>
-            <option value="VR6AewLTigWG4x3GB5nY">Patrick</option>
-            <option value="ErXwobaYiN019PkySvjV">Antoni (British)</option>
-          </select>
-        </div>
-        <div class="row">
-          <button class="btn btn-sm btn-primary" id="testVoiceBtn">Test</button>
+          <button class="btn btn-sm btn-primary" id="testVoiceBtn">Test voice</button>
         </div>
         <div id="voiceStatus"></div>
       </div>
@@ -393,8 +380,7 @@ const personBadge = document.getElementById('personBadge');
 const detectionCount = document.getElementById('detectionCount');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
-const voiceSelect = document.getElementById('voiceSelect');
-const voiceIdInput = document.getElementById('voiceIdInput');
+const ttsAccent = document.getElementById('ttsAccent');
 const testVoiceBtn = document.getElementById('testVoiceBtn');
 const voiceStatus = document.getElementById('voiceStatus');
 const micBtn = document.getElementById('micBtn');
@@ -423,22 +409,11 @@ let isStreaming = false;
 let lastDetections = [];
 let activeTab = 'camera';
 
-// ---- ElevenLabs (server-side, key in backend) ----
-const storedVoice = localStorage.getItem('ally_voice') || '';
-voiceIdInput.value = storedVoice;
-function getVoiceId() {
-  return voiceIdInput.value.trim() || voiceSelect.value || '21m00Tcm4TlvDq8ikWAM';
-}
-function saveVoice() {
-  localStorage.setItem('ally_voice', voiceIdInput.value.trim());
-  voiceStatus.textContent = 'Saved.'; voiceStatus.className = 'status-ok';
-  setTimeout(() => { voiceStatus.textContent = ''; }, 2000);
-}
-voiceSelect.addEventListener('change', () => {
-  if (voiceSelect.value && !voiceIdInput.value) {
-    voiceIdInput.value = voiceSelect.value;
-    saveVoice();
-  }
+// ---- TTS (gTTS server-side, free) ----
+const storedAccent = localStorage.getItem('ally_accent') || 'com';
+ttsAccent.value = storedAccent;
+ttsAccent.addEventListener('change', () => {
+  localStorage.setItem('ally_accent', ttsAccent.value);
 });
 
 // ---- State ----
@@ -668,9 +643,8 @@ async function speakWithElevenLabs(text, onDone) {
   try {
     const res = await fetch('/api/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice_id: getVoiceId() }),
+      body: JSON.stringify({ text, lang: 'en', tld: ttsAccent.value }),
     });
-    if (res.status === 402) { voiceStatus.textContent = 'Voice needs paid ElevenLabs plan. Using browser voice.'; voiceStatus.className = 'status-err'; throw new Error('paid plan required'); }
     if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`TTS ${res.status}: ${e}`); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -687,7 +661,7 @@ async function testElevenLabs() {
   try {
     const res = await fetch('/api/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: 'Hello, this is a test.', voice_id: getVoiceId() }),
+      body: JSON.stringify({ text: 'Hello, this is a test.', lang: 'en', tld: ttsAccent.value }),
     });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const blob = await res.blob();
@@ -1412,7 +1386,6 @@ async function askQuestion(question) {
 settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); settingsPanel.classList.toggle('open'); });
 document.addEventListener('click', () => settingsPanel.classList.remove('open'));
 settingsPanel.addEventListener('click', (e) => e.stopPropagation());
-voiceSelect.addEventListener('change', saveVoice);
 testVoiceBtn.addEventListener('click', testElevenLabs);
 
 // ---- Mic ----

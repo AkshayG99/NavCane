@@ -14,8 +14,11 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
 from openai import OpenAI
+import io
+
 import httpx
 from elevenlabs.client import ElevenLabs
+from gtts import gTTS
 import uvicorn
 from ultralytics import YOLO
 
@@ -311,8 +314,6 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
     )
 
 
-ELEVEN_VOICES_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
-
 @app.post("/api/tts")
 async def text_to_speech(request: Request):
     try:
@@ -320,42 +321,40 @@ async def text_to_speech(request: Request):
     except Exception:
         return StreamingResponse(iter(["invalid json"]), media_type="text/plain", status_code=400)
     text = body.get("text", "")
-    voice_id = body.get("voice_id", "")
+    lang = body.get("lang", "en")
+    tld = body.get("tld", "com")
     if not text:
         return StreamingResponse(iter(["no text"]), media_type="text/plain", status_code=400)
-    if not ELEVENLABS_API_KEY:
-        logger.warning("ElevenLabs not configured, falling back to browser TTS")
-        return StreamingResponse(iter(["no key"]), media_type="text/plain", status_code=400)
 
-    # Map "default" to a known free-tier voice ID
-    if not voice_id or voice_id == "default":
-        voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel — works on paid; free accounts need a custom/default voice
+    # Try ElevenLabs first if configured
+    if ELEVENLABS_API_KEY:
+        voice_id = body.get("voice_id", "")
+        if voice_id:
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream",
+                        headers={"xi-api-key": ELEVENLABS_API_KEY},
+                        json={"text": text, "model_id": "eleven_v3", "output_format": "mp3_44100_128"},
+                    )
+                    if resp.is_success:
+                        async def gen_el():
+                            async for chunk in resp.aiter_bytes():
+                                yield chunk
+                        return StreamingResponse(gen_el(), media_type="audio/mpeg")
+                    logger.warning(f"ElevenLabs returned {resp.status_code}, falling back to gTTS")
+            except Exception as e:
+                logger.warning(f"ElevenLabs error: {e}, falling back to gTTS")
 
+    # gTTS fallback (free, no key needed)
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                ELEVEN_VOICES_URL.format(voice_id=voice_id),
-                headers={"xi-api-key": ELEVENLABS_API_KEY},
-                json={
-                    "text": text,
-                    "model_id": "eleven_v3",
-                    "output_format": "mp3_44100_128",
-                },
-            )
-            if resp.status_code == 402:
-                logger.error("ElevenLabs: free tier can't use library voice. Try a custom voice or upgrade.")
-                return StreamingResponse(iter(["paid_voice"]), media_type="text/plain", status_code=402)
-            resp.raise_for_status()
-
-            async def generate():
-                async for chunk in resp.aiter_bytes():
-                    yield chunk
-
-            return StreamingResponse(generate(), media_type="audio/mpeg", headers={
-                "X-ElevenLabs-Used": "1",
-            })
+        tts = gTTS(text=text, lang=lang, tld=tld)
+        buf = io.BytesIO()
+        tts.write_to_fp(buf)
+        buf.seek(0)
+        return StreamingResponse(iter([buf.read()]), media_type="audio/mpeg")
     except Exception as e:
-        logger.error(f"ElevenLabs TTS error: {e}")
+        logger.error(f"gTTS error: {e}")
         return StreamingResponse(iter([str(e)]), media_type="text/plain", status_code=500)
 
 

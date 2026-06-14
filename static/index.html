@@ -272,8 +272,6 @@ body {
       <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
       <div class="settings-panel" id="settingsPanel">
         <h3>Voice Settings</h3>
-        <label for="apiKeyInput">ElevenLabs API Key</label>
-        <input type="password" id="apiKeyInput" placeholder="sk_..." value="sk_1039e2421ea3e171de6ff0e5784756651d2966a2a855df22">
         <label for="voiceSelect">Voice</label>
         <select id="voiceSelect">
           <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
@@ -286,13 +284,9 @@ body {
           <option value="ErXwobaYiN019PkySvjV">Antoni (British)</option>
         </select>
         <div class="row">
-          <span class="stat" id="charStat">0 chars used</span>
           <button class="btn btn-sm btn-primary" id="testVoiceBtn">Test</button>
         </div>
         <div id="voiceStatus"></div>
-        <div class="row">
-          <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
-        </div>
       </div>
     </div>
   </header>
@@ -389,12 +383,9 @@ const personBadge = document.getElementById('personBadge');
 const detectionCount = document.getElementById('detectionCount');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
-const apiKeyInput = document.getElementById('apiKeyInput');
 const voiceSelect = document.getElementById('voiceSelect');
-const charStat = document.getElementById('charStat');
 const testVoiceBtn = document.getElementById('testVoiceBtn');
 const voiceStatus = document.getElementById('voiceStatus');
-const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const micBtn = document.getElementById('micBtn');
 const micLabel = document.getElementById('micLabel');
 const cameraPip = document.getElementById('cameraPip');
@@ -421,39 +412,13 @@ let isStreaming = false;
 let lastDetections = [];
 let activeTab = 'camera';
 
-// ---- ElevenLabs ----
-let elevenLabsKey = '';
-let elevenLabsVoice = '21m00Tcm4TlvDq8ikWAM';
-let elevenLabsChars = 0;
-
-const DEFAULT_ELEVEN_KEY = 'sk_1039e2421ea3e171de6ff0e5784756651d2966a2a855df22';
-
-function loadSettings() {
-  try {
-    const s = JSON.parse(localStorage.getItem('ally_settings') || '{}');
-    elevenLabsKey = s.key || DEFAULT_ELEVEN_KEY;
-    elevenLabsVoice = s.voice || '21m00Tcm4TlvDq8ikWAM';
-    elevenLabsChars = s.chars || 0;
-    apiKeyInput.value = elevenLabsKey;
-    voiceSelect.value = elevenLabsVoice;
-    charStat.textContent = `${elevenLabsChars} chars used`;
-  } catch (e) {}
+// ---- ElevenLabs (server-side, key in backend) ----
+let elevenLabsVoice = localStorage.getItem('ally_voice') || '21m00Tcm4TlvDq8ikWAM';
+voiceSelect.value = elevenLabsVoice;
+function saveVoice() {
+  elevenLabsVoice = voiceSelect.value;
+  localStorage.setItem('ally_voice', elevenLabsVoice);
 }
-function saveSettings() {
-  elevenLabsKey = apiKeyInput.value.trim(); elevenLabsVoice = voiceSelect.value;
-  localStorage.setItem('ally_settings', JSON.stringify({ key: elevenLabsKey, voice: elevenLabsVoice, chars: elevenLabsChars }));
-  voiceStatus.textContent = 'Saved.'; voiceStatus.className = 'status-ok';
-  setTimeout(() => { voiceStatus.textContent = ''; }, 2000);
-}
-loadSettings();
-// Force the user's key to be active
-if (elevenLabsKey !== DEFAULT_ELEVEN_KEY) {
-  console.log('Updating ElevenLabs key from', elevenLabsKey, 'to', DEFAULT_ELEVEN_KEY);
-  apiKeyInput.value = DEFAULT_ELEVEN_KEY;
-  saveSettings();
-  elevenLabsKey = DEFAULT_ELEVEN_KEY;
-}
-console.log('ElevenLabs key active:', elevenLabsKey ? 'yes' : 'no');
 
 // ---- State ----
 const STATE = { IDLE: 0, LISTENING: 1, PROCESSING: 2, SPEAKING: 3 };
@@ -662,8 +627,7 @@ function processSpeechQueue() {
   speechActive = true;
   const text = speechQueue.shift();
   setState(STATE.SPEAKING);
-  if (elevenLabsKey) speakWithElevenLabs(text, onSpeechDone);
-  else speakWithBrowser(text, onSpeechDone);
+  speakWithElevenLabs(text, onSpeechDone);
 }
 
 function onSpeechDone() {
@@ -681,33 +645,27 @@ function speakWithBrowser(text, onDone) {
 
 async function speakWithElevenLabs(text, onDone) {
   try {
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoice}/stream`, {
-      method: 'POST', headers: { 'xi-api-key': elevenLabsKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, model_id: 'eleven_turbo_v2', voice_settings: { stability: 0.35, similarity_boost: 0.75 } }),
+    const res = await fetch('/api/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice_id: elevenLabsVoice }),
     });
-    if (!res.ok) { const e = await res.text().catch(() => ''); console.error('EL HTTP error:', res.status, e); throw new Error(`EL ${res.status}: ${e}`); }
+    if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`TTS ${res.status}: ${e}`); }
     const blob = await res.blob();
-    elevenLabsChars += text.length;
-    charStat.textContent = `${elevenLabsChars} chars used`;
-    const s = JSON.parse(localStorage.getItem('ally_settings') || '{}');
-    s.chars = elevenLabsChars; localStorage.setItem('ally_settings', JSON.stringify(s));
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url); currentAudio = audio;
     audio.onended = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
     audio.onerror = () => { currentAudio = null; URL.revokeObjectURL(url); onDone(); };
     await audio.play();
-  } catch (e) { console.error('EL error:', e); speakWithBrowser(text, onDone); }
+  } catch (e) { console.error('TTS error:', e); speakWithBrowser(text, onDone); }
 }
 
 async function testElevenLabs() {
-  const key = apiKeyInput.value.trim();
-  if (!key) { voiceStatus.textContent = 'Enter an API key first.'; voiceStatus.className = 'status-err'; return; }
   voiceStatus.textContent = 'Testing...'; voiceStatus.className = '';
   testVoiceBtn.disabled = true;
   try {
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceSelect.value}/stream`, {
-      method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: 'Hello, this is a test.', model_id: 'eleven_turbo_v2', voice_settings: { stability: 0.35, similarity_boost: 0.75 } }),
+    const res = await fetch('/api/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'Hello, this is a test.', voice_id: voiceSelect.value }),
     });
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const blob = await res.blob();
@@ -1432,7 +1390,7 @@ async function askQuestion(question) {
 settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); settingsPanel.classList.toggle('open'); });
 document.addEventListener('click', () => settingsPanel.classList.remove('open'));
 settingsPanel.addEventListener('click', (e) => e.stopPropagation());
-saveSettingsBtn.addEventListener('click', saveSettings);
+voiceSelect.addEventListener('change', saveVoice);
 testVoiceBtn.addEventListener('click', testElevenLabs);
 
 // ---- Mic ----

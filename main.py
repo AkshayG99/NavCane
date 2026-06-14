@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
 from openai import OpenAI
+from elevenlabs.client import ElevenLabs
 import uvicorn
 from ultralytics import YOLO
 
@@ -30,6 +31,7 @@ MIN_DETECT_CONF = float(os.getenv("MIN_DETECT_CONF", "0.3"))
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "128"))
 VLM_IMAGE_MAX = int(os.getenv("VLM_IMAGE_MAX", "480"))
 VLM_JPEG_QUALITY = int(os.getenv("VLM_JPEG_QUALITY", "80"))
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "sk_1039e2421ea3e171de6ff0e5784756651d2966a2a855df22")
 
 SYSTEM_PROMPT = (
     "You are Ally, a real-time navigation assistant for a blind user. "
@@ -54,6 +56,8 @@ ollama_client = OpenAI(
     base_url=f"{OLLAMA_URL}/v1",
     api_key="ollama",
 )
+
+eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
 
 COCO_CLASSES = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
@@ -304,6 +308,36 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/api/tts")
+async def text_to_speech(request: dict):
+    text = request.get("text", "")
+    voice_id = request.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+    if not text:
+        return StreamingResponse(iter(["no text"]), media_type="text/plain", status_code=400)
+    if not eleven_client:
+        logger.warning("ElevenLabs not configured, falling back to browser TTS")
+        return StreamingResponse(iter(["no key"]), media_type="text/plain", status_code=400)
+
+    try:
+        audio_iter = eleven_client.text_to_speech.convert(
+            text=text,
+            voice_id=voice_id,
+            model_id="eleven_v3",
+            output_format="mp3_44100_128",
+        )
+
+        def generate():
+            for chunk in audio_iter:
+                yield chunk
+
+        return StreamingResponse(generate(), media_type="audio/mpeg", headers={
+            "X-ElevenLabs-Used": "1",
+        })
+    except Exception as e:
+        logger.error(f"ElevenLabs TTS error: {e}")
+        return StreamingResponse(iter([str(e)]), media_type="text/plain", status_code=500)
 
 
 if __name__ == "__main__":
